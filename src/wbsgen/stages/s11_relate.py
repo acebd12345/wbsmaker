@@ -38,26 +38,29 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
         # Build item summary for LLM
         summary = "\n".join(f"- {it['item_id']}: {it['description'][:100]}" for it in sec_items[:50])
 
-        llm_result = client.generate_json(
-            system=system_prompt,
-            user=summary,
-            schema={
-                "type": "object",
-                "properties": {
-                    "relations": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "from": {"type": "string"},
-                                "to": {"type": "string"},
-                                "type": {"type": "string", "enum": ["depends_on", "part_of", "related_to", "precedes"]},
+        try:
+            llm_result = client.generate_json(
+                system=system_prompt,
+                user=summary,
+                schema={
+                    "type": "object",
+                    "properties": {
+                        "relations": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "from": {"type": "string"},
+                                    "to": {"type": "string"},
+                                    "type": {"type": "string", "enum": ["depends_on", "part_of", "related_to", "precedes"]},
+                                },
                             },
                         },
                     },
                 },
-            },
-        )
+            )
+        except RuntimeError:
+            llm_result = {}
 
         for rel_data in llm_result.get("relations", []):
             rel_counter += 1

@@ -102,27 +102,31 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
                     source_text=desc[:200],
                 ))
 
-        # LLM extraction (mock mode)
-        llm_result = client.generate_json(
-            system=system_prompt,
-            user=content[:5000],
-            schema={
-                "type": "object",
-                "properties": {
-                    "work_items": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "description": {"type": "string"},
-                                "category": {"type": "string"},
-                                "source_text": {"type": "string"},
+        # LLM extraction
+        try:
+            llm_result = client.generate_json(
+                system=system_prompt,
+                user=content[:2000],
+                schema={
+                    "type": "object",
+                    "properties": {
+                        "work_items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "description": {"type": "string"},
+                                    "category": {"type": "string"},
+                                    "source_text": {"type": "string"},
+                                },
                             },
                         },
                     },
                 },
-            },
-        )
+            )
+        except RuntimeError:
+            # LLM call failed (timeout/5xx) — continue with explicit items
+            pass
 
     # Write output
     with open(out_dir / "work_items.jsonl", "w", encoding="utf-8") as f:

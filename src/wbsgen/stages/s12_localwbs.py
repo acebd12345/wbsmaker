@@ -92,28 +92,31 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
             nodes.append(sec_node)
             root.children.append(sec_node_id)
 
-        # LLM call (mock mode generates synthetic)
+        # LLM call for WBS structure refinement
         item_summary = "\n".join(f"- {it['item_id']}: {it['description'][:80]}" for it in sd_items[:50])
-        client.generate_json(
-            system=system_prompt,
-            user=item_summary,
-            schema={
-                "type": "object",
-                "properties": {
-                    "nodes": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": "string"},
-                                "level": {"type": "integer"},
+        try:
+            client.generate_json(
+                system=system_prompt,
+                user=item_summary,
+                schema={
+                    "type": "object",
+                    "properties": {
+                        "nodes": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "title": {"type": "string"},
+                                    "level": {"type": "integer"},
+                                },
                             },
                         },
                     },
                 },
-            },
-            temperature=cfg.get("llm", {}).get("temperature_wbs", 0.1),
-        )
+                temperature=cfg.get("llm", {}).get("temperature_wbs", 0.1),
+            )
+        except RuntimeError:
+            pass
 
         # Write local WBS
         (out_dir / f"{subdoc_id}.json").write_text(

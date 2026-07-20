@@ -70,29 +70,32 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
         if not any(n.node_id == pn.node_id for n in merged):
             merged.append(pn)
 
-    # LLM merge call (mock mode)
+    # LLM merge call for structure refinement
     summaries = "\n".join(f"- {n.code} {n.title}" for n in merged if n.code)
-    client.generate_json(
-        system=system_prompt,
-        user=summaries[:5000],
-        schema={
-            "type": "object",
-            "properties": {
-                "nodes": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "code": {"type": "string"},
-                            "title": {"type": "string"},
-                            "level": {"type": "integer"},
+    try:
+        client.generate_json(
+            system=system_prompt,
+            user=summaries[:5000],
+            schema={
+                "type": "object",
+                "properties": {
+                    "nodes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "string"},
+                                "title": {"type": "string"},
+                                "level": {"type": "integer"},
+                            },
                         },
                     },
                 },
             },
-        },
-        temperature=cfg.get("llm", {}).get("temperature_wbs", 0.1),
-    )
+            temperature=cfg.get("llm", {}).get("temperature_wbs", 0.1),
+        )
+    except RuntimeError:
+        pass
 
     # Write global WBS
     (out_dir / "wbs.json").write_text(

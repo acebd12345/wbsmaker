@@ -64,17 +64,20 @@ class LLMClient:
     def _real_generate(
         self, system: str, user: str, schema: dict | None, temperature: float
     ) -> dict:
-        """Call real LLM endpoint (not used in dev)."""
+        """Call real LLM endpoint."""
         from openai import OpenAI
         client = OpenAI(
             base_url=self.cfg["base_url"],
             api_key=self.cfg["api_key"],
+            timeout=60.0,
+            max_retries=0,
         )
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
 
+        last_err = None
         for attempt in range(self.max_retries):
             try:
                 resp = client.chat.completions.create(
@@ -82,13 +85,15 @@ class LLMClient:
                     messages=messages,
                     temperature=temperature,
                     response_format={"type": "json_object"},
+                    timeout=60.0,
                 )
                 text = resp.choices[0].message.content
                 return json.loads(text)
             except Exception as e:
-                if attempt == self.max_retries - 1:
-                    raise RuntimeError(f"LLM failed after {self.max_retries} retries: {e}")
-        return {}
+                last_err = e
+                import time as _time
+                _time.sleep(min(2 ** attempt, 8))
+        raise RuntimeError(f"LLM failed after {self.max_retries} retries: {last_err}")
 
 
 def _generate_from_schema(schema: dict, context: str = "") -> dict:

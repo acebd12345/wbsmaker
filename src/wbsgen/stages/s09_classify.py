@@ -86,23 +86,26 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
 
         # LLM confirmation — only for non-EXCLUDED sections
         if content and not has_garbled and priority != "EXCLUDED":
-            llm_result = client.generate_json(
-                system=system_prompt,
-                user=content[:5000],
-                schema={
-                    "type": "object",
-                    "properties": {
-                        "category": {"type": "string", "enum": [c.value for c in ContentCategory]},
-                        "confidence": {"type": "number"},
-                        "reasoning": {"type": "string"},
+            try:
+                llm_result = client.generate_json(
+                    system=system_prompt,
+                    user=content[:2000],
+                    schema={
+                        "type": "object",
+                        "properties": {
+                            "category": {"type": "string", "enum": [c.value for c in ContentCategory]},
+                            "confidence": {"type": "number"},
+                            "reasoning": {"type": "string"},
+                        },
                     },
-                },
-            )
-            llm_category = llm_result.get("category", category)
-            if category != ContentCategory.UNCLASSIFIED.value:
+                )
+                llm_category = llm_result.get("category", category)
+                if category != ContentCategory.UNCLASSIFIED.value:
+                    final = category
+                else:
+                    final = llm_category
+            except RuntimeError:
                 final = category
-            else:
-                final = llm_category
         else:
             final = category
 
