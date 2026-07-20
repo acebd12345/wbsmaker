@@ -9,7 +9,7 @@
   "garbled_pages_start": 174,
   "garbled_pages_end": 308,
   "subdoc_boundaries": [
-    {"title": "契約本文", "page_start": 1, "page_end": 47, "type": "CONTRACT_BODY"},
+    {"title": "契約本文", "page_start": 0, "page_end": 47, "type": "CONTRACT_BODY"},
     {"title": "附件", "page_start": 48, "page_end": 63, "type": "ATTACHMENT"},
     {"title": "簽署頁", "page_start": 64, "page_end": 64, "type": "SIGNATURE_PAGE"},
     {"title": "需求規範書", "page_start": 65, "page_end": 92, "type": "REQUIREMENT_SPECIFICATION"},
