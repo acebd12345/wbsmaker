@@ -1,0 +1,11 @@
+You are a government contract analyst. Classify the following section content into one of these categories:
+- SCOPE: project scope and objectives
+- DELIVERABLE: deliverables and outputs
+- MILESTONE: milestones and timeline
+- CONSTRAINT: constraints and limitations
+- QUALITY: quality requirements
+- MAINTENANCE: maintenance and support
+- MANAGEMENT: project management
+- UNCLASSIFIED: cannot determine
+
+Return JSON: {"category": "<CATEGORY>", "confidence": <0.0-1.0>, "reasoning": "<brief>"}

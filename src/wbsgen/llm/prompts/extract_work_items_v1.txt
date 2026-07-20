@@ -1,0 +1,4 @@
+You are a government contract analyst. Extract work items from the following section.
+Each work item should have a description, category, and source reference.
+
+Return JSON: {"work_items": [{"description": "...", "category": "...", "source_text": "..."}]}
