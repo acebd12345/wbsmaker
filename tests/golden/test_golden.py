@@ -120,18 +120,22 @@ class TestSections:
     def _load_sections(self):
         return json.loads((PROJECT_DIR / "06_section" / "sections.json").read_text(encoding="utf-8"))
 
+    def _req_spec_subdoc_ids(self):
+        """Find subdoc IDs that are REQUIREMENT_SPECIFICATION."""
+        subdocs = json.loads((PROJECT_DIR / "04_subdoc" / "subdocs.json").read_text(encoding="utf-8"))
+        return {s["subdoc_id"] for s in subdocs if s["doc_type"] == "REQUIREMENT_SPECIFICATION"}
+
     def test_chapter_count(self):
         sections = self._load_sections()
-        req_sections = [s for s in sections if "requirement" in s.get("subdoc_id", "").lower()
-                        or s.get("subdoc_id", "").startswith("subdoc-req")]
-        # Filter to top-level chapters only
+        req_ids = self._req_spec_subdoc_ids()
+        req_sections = [s for s in sections if s.get("subdoc_id") in req_ids]
         top = [s for s in req_sections if s.get("level", 1) == 1]
         assert len(top) == EXPECTED["requirement_spec"]["chapter_count"]
 
     def test_chapter_1_2_same_page(self):
         sections = self._load_sections()
-        req_sections = [s for s in sections if "requirement" in s.get("subdoc_id", "").lower()
-                        or s.get("subdoc_id", "").startswith("subdoc-req")]
+        req_ids = self._req_spec_subdoc_ids()
+        req_sections = [s for s in sections if s.get("subdoc_id") in req_ids]
         top = sorted([s for s in req_sections if s.get("level", 1) == 1], key=lambda s: s["start_page"])
         assert len(top) >= 2
         assert top[0]["start_page"] == top[1]["start_page"] == EXPECTED["requirement_spec"]["chapter_1_2_same_page"]
