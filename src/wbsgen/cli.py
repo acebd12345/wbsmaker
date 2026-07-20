@@ -335,7 +335,7 @@ def _print_summary(proj_dir: Path):
             console.print(f"  Output: {f}")
 
 
-# ── inspect (stub) ─────────────────────────────────────────────────────
+# ── inspect ────────────────────────────────────────────────────────────
 
 @app.command()
 def inspect(
@@ -343,11 +343,141 @@ def inspect(
     view: str = typer.Argument(...),
     id: str = typer.Option("", "--id"),
 ):
-    """Inspect pipeline artifacts."""
-    console.print(f"[yellow]inspect {view}: not yet implemented[/yellow]")
+    """Inspect pipeline artifacts (pages|subdocs|sections|tables|items|wbs|issues|trace)."""
+    import json
+    proj_dir = _project_dir(project)
+    if not proj_dir.exists():
+        console.print(f"[red]Project not found: {project}[/red]")
+        raise typer.Exit(3)
+
+    if view == "pages":
+        _inspect_pages(proj_dir)
+    elif view == "subdocs":
+        _inspect_subdocs(proj_dir)
+    elif view == "sections":
+        _inspect_sections(proj_dir)
+    elif view == "tables":
+        _inspect_tables(proj_dir)
+    elif view == "items":
+        _inspect_items(proj_dir)
+    elif view == "wbs":
+        _inspect_wbs(proj_dir)
+    elif view == "issues":
+        _inspect_issues(proj_dir)
+    elif view == "trace":
+        _inspect_trace(proj_dir, id)
+    else:
+        console.print(f"[red]Unknown view: {view}[/red]")
 
 
-# ── rerun (stub) ───────────────────────────────────────────────────────
+def _inspect_pages(proj_dir: Path):
+    import json
+    p = proj_dir / "02_quality" / "summary.json"
+    if p.exists():
+        s = json.loads(p.read_text(encoding="utf-8"))
+        console.print(f"Total: {s['total_pages']}  Normal: {s['normal_text']}  Image: {s['image_only']}  Garbled: {s['garbled_text']}")
+
+
+def _inspect_subdocs(proj_dir: Path):
+    import json
+    p = proj_dir / "04_subdoc" / "subdocs.json"
+    if not p.exists():
+        console.print("[yellow]Not available[/yellow]"); return
+    subdocs = json.loads(p.read_text(encoding="utf-8"))
+    tbl = RichTable(title="Subdocuments")
+    tbl.add_column("ID"); tbl.add_column("Title"); tbl.add_column("Type"); tbl.add_column("Pages")
+    for s in subdocs:
+        tbl.add_row(s["subdoc_id"], s["title"], s["doc_type"], f"p{s['page_start']+1}-p{s['page_end']+1}")
+    console.print(tbl)
+
+
+def _inspect_sections(proj_dir: Path):
+    import json
+    p = proj_dir / "06_section" / "sections.json"
+    if not p.exists():
+        console.print("[yellow]Not available[/yellow]"); return
+    sections = json.loads(p.read_text(encoding="utf-8"))
+    tbl = RichTable(title="Sections")
+    tbl.add_column("ID"); tbl.add_column("Subdoc"); tbl.add_column("Title"); tbl.add_column("Pages")
+    for s in sections:
+        tbl.add_row(s["section_id"], s["subdoc_id"], s["title"][:40], f"p{s['start_page']+1}-p{s['end_page']+1}")
+    console.print(tbl)
+
+
+def _inspect_tables(proj_dir: Path):
+    import json
+    p = proj_dir / "07_table" / "tables.json"
+    if not p.exists():
+        console.print("[yellow]Not available[/yellow]"); return
+    tables = json.loads(p.read_text(encoding="utf-8"))
+    tbl = RichTable(title="Tables")
+    tbl.add_column("ID"); tbl.add_column("Caption"); tbl.add_column("Pages"); tbl.add_column("Rows"); tbl.add_column("Cross-page")
+    for t in tables:
+        if t.get("caption"):
+            tbl.add_row(t["table_id"], t["caption"][:30], f"p{t['page_start']+1}-p{t['page_end']+1}",
+                       str(len(t.get("rows", []))), str(t.get("cross_page_merged", False)))
+    console.print(tbl)
+
+
+def _inspect_items(proj_dir: Path):
+    import json
+    p = proj_dir / "10_extract" / "work_items.jsonl"
+    if not p.exists():
+        console.print("[yellow]Not available[/yellow]"); return
+    items = [json.loads(l) for l in p.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
+    console.print(f"Total work items: {len(items)}")
+    for it in items[:20]:
+        console.print(f"  {it['item_id']}: {it['description'][:60]}")
+
+
+def _inspect_wbs(proj_dir: Path):
+    import json
+    p = proj_dir / "13_merge" / "wbs.json"
+    if not p.exists():
+        console.print("[yellow]Not available[/yellow]"); return
+    nodes = json.loads(p.read_text(encoding="utf-8"))
+    for n in nodes:
+        if n.get("level", 0) == 0:
+            continue
+        indent = "  " * (n["level"] - 1)
+        code = n.get("code", "")
+        console.print(f"{indent}{code:10s} {n['title'][:50]}")
+
+
+def _inspect_issues(proj_dir: Path):
+    import json
+    p = proj_dir / "14_validate" / "report.json"
+    if not p.exists():
+        console.print("[yellow]Not available[/yellow]"); return
+    report = json.loads(p.read_text(encoding="utf-8"))
+    console.print(f"Passed: {report['passed']}  NEEDS_REVIEW: {report['needs_review_count']}")
+    for iss in report.get("issues", []):
+        console.print(f"  [{iss['severity']}] {iss['message']}")
+
+
+def _inspect_trace(proj_dir: Path, node_id: str):
+    import json
+    if not node_id:
+        console.print("[red]--id required for trace[/red]"); return
+    wbs_path = proj_dir / "13_merge" / "wbs.json"
+    items_path = proj_dir / "10_extract" / "work_items.jsonl"
+    if not wbs_path.exists():
+        console.print("[yellow]WBS not available[/yellow]"); return
+    nodes = json.loads(wbs_path.read_text(encoding="utf-8"))
+    node = next((n for n in nodes if n["node_id"] == node_id or n.get("code") == node_id), None)
+    if not node:
+        console.print(f"[red]Node not found: {node_id}[/red]"); return
+    console.print(f"Node: {node.get('code', '')} {node['title']}")
+    console.print(f"  Level: {node['level']}  Type: {node.get('generation_type', '')}")
+    console.print(f"  Source pages: {[p+1 for p in node.get('source_pages', [])]}")
+    if items_path.exists():
+        items = {json.loads(l)["item_id"]: json.loads(l) for l in items_path.read_text(encoding="utf-8").strip().split("\n") if l.strip()}
+        for wi_id in node.get("work_items", []):
+            wi = items.get(wi_id, {})
+            console.print(f"  Work item {wi_id}: {wi.get('description', '')[:60]}")
+
+
+# ── rerun ──────────────────────────────────────────────────────────────
 
 @app.command()
 def rerun(
@@ -356,11 +486,35 @@ def rerun(
     section: str = typer.Option("", "--section"),
     table: str = typer.Option("", "--table"),
 ):
-    """Partial re-run of a stage."""
-    console.print(f"[yellow]rerun: not yet implemented[/yellow]")
+    """Partial re-run: rerun a stage and mark downstream as stale."""
+    proj_dir = _project_dir(project)
+    if not proj_dir.exists():
+        console.print(f"[red]Project not found: {project}[/red]")
+        raise typer.Exit(3)
+
+    cfg = load_config()
+    m = Manifest(proj_dir)
+    runner = _get_stage_runner()
+
+    if stage not in runner:
+        console.print(f"[red]Unknown stage: {stage}[/red]")
+        raise typer.Exit(3)
+
+    console.print(f"[bold]Re-running stage {stage}...[/bold]")
+    input_hash = _compute_stage_input_hash(proj_dir, stage, m)
+    m.mark_running(stage, input_hash)
+    try:
+        runner[stage](proj_dir, cfg, m)
+        m.mark_done(stage)
+        m.mark_downstream_stale(stage)
+        console.print(f"[green]Stage {stage}: done. Downstream marked stale.[/green]")
+    except Exception as e:
+        m.mark_failed(stage, str(e))
+        console.print(f"[red]Stage {stage}: FAILED - {e}[/red]")
+        raise typer.Exit(3)
 
 
-# ── export (stub) ──────────────────────────────────────────────────────
+# ── export ─────────────────────────────────────────────────────────────
 
 @app.command(name="export")
 def export_cmd(
@@ -368,17 +522,57 @@ def export_cmd(
     f: str = typer.Option("xlsx,json,mermaid,csv", "-f"),
 ):
     """Export WBS in various formats."""
-    console.print(f"[yellow]export: not yet implemented[/yellow]")
+    proj_dir = _project_dir(project)
+    if not proj_dir.exists():
+        console.print(f"[red]Project not found: {project}[/red]")
+        raise typer.Exit(3)
+
+    cfg = load_config()
+    m = Manifest(proj_dir)
+    runner = _get_stage_runner()
+
+    if "export" not in runner:
+        console.print("[red]Export stage not available[/red]")
+        raise typer.Exit(3)
+
+    runner["export"](proj_dir, cfg, m)
+    m.mark_done("export")
+    console.print("[green]Export complete[/green]")
+
+    exports_dir = proj_dir / "exports"
+    if exports_dir.exists():
+        for ef in sorted(exports_dir.iterdir()):
+            console.print(f"  {ef}")
 
 
-# ── goldtest (stub) ────────────────────────────────────────────────────
+# ── goldtest ───────────────────────────────────────────────────────────
 
 @app.command()
 def goldtest(
     pdf: str = typer.Option("tests/golden/contract_11108.pdf", "--pdf"),
 ):
-    """Run golden test against expected.json."""
-    console.print(f"[yellow]goldtest: not yet implemented[/yellow]")
+    """Run golden test: full pipeline on 11108 contract, then verify against expected.json."""
+    import subprocess
+    pdf_path = Path(pdf).resolve()
+    if not pdf_path.exists():
+        console.print(f"[red]PDF not found: {pdf_path}[/red]")
+        raise typer.Exit(3)
+
+    console.print("[bold]Running golden test...[/bold]")
+
+    # Run pytest on golden tests
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/golden", "-x", "-q", "--tb=short"],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    console.print(result.stdout)
+    if result.stderr:
+        console.print(result.stderr)
+
+    if result.returncode != 0:
+        console.print("[red]Golden test FAILED[/red]")
+        raise typer.Exit(3)
+    console.print("[green]Golden test PASSED[/green]")
 
 
 # ── Entry point ────────────────────────────────────────────────────────
