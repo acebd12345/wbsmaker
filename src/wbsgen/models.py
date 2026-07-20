@@ -182,6 +182,7 @@ class Table(BaseModel):
 
 class WorkItem(BaseModel):
     item_id: str
+    subdoc_id: str = ""
     section_id: str = ""
     table_id: str = ""
     description: str

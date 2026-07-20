@@ -33,13 +33,21 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     prompt_path = Path(__file__).parent.parent / "llm" / "prompts" / "extract_work_items_v1.txt"
     system_prompt = prompt_path.read_text(encoding="utf-8")
 
-    class_map = {c["section_id"]: c.get("category", "UNCLASSIFIED") for c in classifications}
+    class_map = {c["section_id"]: c for c in classifications}
     all_items: list[WorkItem] = []
     item_counter = 0
+
+    # Build priority map: only extract from PRIMARY/SECONDARY sources
+    priority_map = {c["section_id"]: c.get("priority", "PRIMARY") for c in classifications}
 
     for sec in sections:
         subdoc = _find_subdoc(sec["subdoc_id"], subdocs)
         if subdoc and subdoc["doc_type"] in ("SERVICE_PROPOSAL", "SCANNED_PAGES"):
+            continue
+
+        # Skip EXCLUDED sections (Fix 3: priority filter)
+        priority = priority_map.get(sec["section_id"], "PRIMARY")
+        if priority == "EXCLUDED":
             continue
 
         # Check no garbled pages
@@ -57,17 +65,23 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
         if not content.strip():
             continue
 
-        category = class_map.get(sec["section_id"], "UNCLASSIFIED")
+        cls_info = class_map.get(sec["section_id"], {})
+        category = cls_info.get("category", "UNCLASSIFIED")
+
+        # Extract first meaningful paragraph as source_text (not the title)
+        lines = [l.strip() for l in content.split("\n") if l.strip() and not l.startswith("#")]
+        first_paragraph = lines[0][:500] if lines else sec["title"]
 
         # Extract from text blocks
         item_counter += 1
         text_item = WorkItem(
             item_id=f"item-{item_counter:04d}",
+            subdoc_id=sec["subdoc_id"],
             section_id=sec["section_id"],
             description=sec["title"],
             category=ContentCategory(category) if category in ContentCategory.__members__ else ContentCategory.UNCLASSIFIED,
             source_pages=list(range(sec["start_page"], sec["end_page"] + 1)),
-            source_text=content[:500],
+            source_text=first_paragraph,
         )
         all_items.append(text_item)
 
@@ -79,6 +93,7 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
                 desc = " | ".join(c for c in row if c)
                 all_items.append(WorkItem(
                     item_id=f"item-{item_counter:04d}",
+                    subdoc_id=sec["subdoc_id"],
                     section_id=sec["section_id"],
                     table_id=tbl["table_id"],
                     description=desc[:200],

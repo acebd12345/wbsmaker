@@ -14,6 +14,10 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     sections_path = proj_dir / "06_section" / "sections.json"
     subdocs_path = proj_dir / "04_subdoc" / "subdocs.json"
     out_dir = proj_dir / "12_localwbs"
+    # Clean previous outputs to avoid stale files from earlier runs
+    if out_dir.exists():
+        for old_file in out_dir.glob("*.json"):
+            old_file.unlink()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     items = []
@@ -29,12 +33,18 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     prompt_path = Path(__file__).parent.parent / "llm" / "prompts" / "generate_local_wbs_v1.txt"
     system_prompt = prompt_path.read_text(encoding="utf-8")
 
-    # Group items by subdoc for local WBS generation
+    # Build priority map from classifications
+    priority_map = {c["section_id"]: c.get("priority", "PRIMARY") for c in classifications}
+
+    # Group items by subdoc for local WBS generation (skip EXCLUDED)
     subdoc_items: dict[str, list[dict]] = {}
     sec_to_subdoc = {s["section_id"]: s["subdoc_id"] for s in sections}
 
     for item in items:
-        sid = sec_to_subdoc.get(item.get("section_id", ""), "unknown")
+        sec_id = item.get("section_id", "")
+        if priority_map.get(sec_id, "PRIMARY") == "EXCLUDED":
+            continue
+        sid = sec_to_subdoc.get(sec_id, "unknown")
         subdoc_items.setdefault(sid, []).append(item)
 
     # Generate local WBS per subdoc

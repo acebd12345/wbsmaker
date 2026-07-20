@@ -30,6 +30,7 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
         qualities[q["page_index"]] = q["quality"]
 
     all_sections: list[Section] = []
+    global_sec_counter = 0
 
     for subdoc in subdocs:
         sid = subdoc["subdoc_id"]
@@ -59,6 +60,10 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
 
         # Find chapter titles in body text
         sections = _find_sections(sid, start, end, page_blocks, toc_entries, doc_type)
+        # Assign globally unique section_id: {subdoc_id}-sec-{nnn}
+        for sec in sections:
+            global_sec_counter += 1
+            sec.section_id = f"{sid}-sec-{global_sec_counter:03d}"
         all_sections.extend(sections)
 
     # Write output
@@ -164,11 +169,18 @@ def _match_chapter_title(text: str, blk: dict, doc_type: str) -> tuple[str, str]
                     return None
                 return numeral, f"{numeral}、{title_part}"
 
-    # For contract body: look for 第N條 pattern
+    # For contract body: look for 第N條 pattern in body text (not TOC lines)
     if doc_type == "CONTRACT_BODY":
+        # Filter out TOC entries (with dots or page numbers)
+        raw_text = blk.get("text", "")
+        if "...." in raw_text or "…" in raw_text:
+            return None
         m = re.match(r"^(第[一二三四五六七八九十百]+條)\s*(.+)", text)
         if m and font_size >= 13:
-            return m.group(1), f"{m.group(1)} {m.group(2)}"
+            # Strip trailing page numbers and dots from title
+            title_part = m.group(2).strip()
+            title_part = re.sub(r"[.…·]+\s*\d*\s*$", "", title_part).strip()
+            return m.group(1), f"{m.group(1)} {title_part}"
 
     # For bid instructions: look for numbered sections
     if doc_type == "BID_INSTRUCTIONS":

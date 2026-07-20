@@ -32,6 +32,12 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     prompt_path = Path(__file__).parent.parent / "llm" / "prompts" / "classify_content_v1.txt"
     system_prompt = prompt_path.read_text(encoding="utf-8")
 
+    # Subdoc types that are EXCLUDED by default (DESIGN.md section 14)
+    EXCLUDED_DOC_TYPES = {
+        "BID_INSTRUCTIONS", "EVALUATION_GUIDELINES",
+        "TENDER_ANNOUNCEMENT", "LAW_OR_POLICY",
+    }
+
     classifications = []
 
     for sec in sections:
@@ -42,6 +48,28 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
 
         # Rule-based classification
         category = _rule_classify(sec, tables)
+
+        # Determine priority based on subdoc type (Fix 3)
+        priority = "PRIMARY"
+        wbs_relevance = 0.8
+        if subdoc and subdoc["doc_type"] in EXCLUDED_DOC_TYPES:
+            priority = "EXCLUDED"
+            wbs_relevance = 0.05
+        elif subdoc and subdoc["doc_type"] == "REQUIREMENT_SPECIFICATION":
+            priority = "PRIMARY"
+            wbs_relevance = 0.95
+        elif subdoc and subdoc["doc_type"] == "CONTRACT_BODY":
+            priority = "SECONDARY"
+            wbs_relevance = 0.6
+        elif subdoc and subdoc["doc_type"] == "ATTACHMENT":
+            # Attachments with work/delivery/acceptance content are PRIMARY
+            if category in (ContentCategory.DELIVERABLE.value, ContentCategory.QUALITY.value,
+                           ContentCategory.MILESTONE.value, ContentCategory.MAINTENANCE.value):
+                priority = "PRIMARY"
+                wbs_relevance = 0.85
+            else:
+                priority = "SECONDARY"
+                wbs_relevance = 0.5
 
         # Read assembled content (skip garbled/image pages)
         md_path = assemble_dir / f"{sec['section_id']}.md"
@@ -56,11 +84,11 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
                 has_garbled = True
                 break
 
-        # LLM confirmation (mock mode generates synthetic response)
-        if content and not has_garbled:
+        # LLM confirmation — only for non-EXCLUDED sections
+        if content and not has_garbled and priority != "EXCLUDED":
             llm_result = client.generate_json(
                 system=system_prompt,
-                user=content[:5000],  # Truncate for input limit
+                user=content[:5000],
                 schema={
                     "type": "object",
                     "properties": {
@@ -71,7 +99,6 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
                 },
             )
             llm_category = llm_result.get("category", category)
-            # Use rule-based if LLM disagrees and rule has strong signal
             if category != ContentCategory.UNCLASSIFIED.value:
                 final = category
             else:
@@ -85,6 +112,8 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
             "title": sec["title"],
             "category": final,
             "rule_category": category,
+            "priority": priority,
+            "wbs_relevance": wbs_relevance,
         })
 
     (out_dir / "classifications.json").write_text(

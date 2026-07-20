@@ -182,3 +182,122 @@ class TestTables:
         header_norm = [c.strip() for c in header]
         dup_count = sum(1 for r in rows if [c.strip() for c in r] == header_norm)
         assert dup_count == 0, f"Found {dup_count} duplicate header rows in table 5"
+
+
+# ── Fix 1: Section IDs globally unique + traceability ────────────────
+
+class TestSectionIdUniqueness:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        _require_stage(6, "06_section")
+
+    def _load_sections(self):
+        return json.loads((PROJECT_DIR / "06_section" / "sections.json").read_text(encoding="utf-8"))
+
+    def test_all_section_ids_globally_unique(self):
+        sections = self._load_sections()
+        ids = [s["section_id"] for s in sections]
+        assert len(ids) == len(set(ids)), f"Duplicate section_ids found: {len(ids)} total, {len(set(ids))} unique"
+
+    def test_section_id_contains_subdoc_prefix(self):
+        """Every section_id should embed its subdoc_id for traceability."""
+        sections = self._load_sections()
+        for s in sections:
+            assert s["section_id"].startswith(s["subdoc_id"]), (
+                f"{s['section_id']} does not start with {s['subdoc_id']}"
+            )
+
+    def test_work_item_section_ids_resolve(self):
+        """Every work item's section_id must exist in sections.json."""
+        _require_stage(10, "10_extract")
+        sections = self._load_sections()
+        sec_ids = {s["section_id"] for s in sections}
+        items_path = PROJECT_DIR / "10_extract" / "work_items.jsonl"
+        for line in items_path.read_text(encoding="utf-8").strip().split("\n"):
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            assert item["section_id"] in sec_ids, (
+                f"item {item['item_id']} references unknown section {item['section_id']}"
+            )
+
+
+# ── Fix 2: Contract body clean titles ────────────────────────────────
+
+class TestContractBodyTitles:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        _require_stage(6, "06_section")
+
+    def _load_sections(self):
+        return json.loads((PROJECT_DIR / "06_section" / "sections.json").read_text(encoding="utf-8"))
+
+    def test_no_toc_dots_in_titles(self):
+        """subdoc-001 section titles must not contain TOC dot leaders."""
+        sections = self._load_sections()
+        s001 = [s for s in sections if s.get("subdoc_id") == "subdoc-001"]
+        for s in s001:
+            assert "...." not in s["title"], f"TOC dots in title: {s['title']}"
+            assert "…" not in s["title"], f"Ellipsis in title: {s['title']}"
+
+    def test_contract_body_anchors_in_body_range(self):
+        """Contract body sections should anchor in body text (p2-47), not TOC (p0-1)."""
+        sections = self._load_sections()
+        exp = EXPECTED["sections_fix"]
+        s001 = [s for s in sections if s.get("subdoc_id") == "subdoc-001"]
+        assert len(s001) == exp["contract_body_section_count"]
+        lo, hi = exp["contract_body_page_range"]
+        for s in s001:
+            assert lo <= s["start_page"] <= hi, (
+                f"{s['section_id']} start_page {s['start_page']} outside [{lo}, {hi}]"
+            )
+
+
+# ── Fix 3: Priority filtering — EXCLUDED content out of WBS ─────────
+
+class TestPriorityFiltering:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        _require_stage(10, "10_extract")
+        _require_stage(13, "13_merge")
+
+    def _load_wbs(self):
+        return json.loads((PROJECT_DIR / "13_merge" / "wbs.json").read_text(encoding="utf-8"))
+
+    def _load_items(self):
+        lines = (PROJECT_DIR / "10_extract" / "work_items.jsonl").read_text(encoding="utf-8").strip().split("\n")
+        return [json.loads(l) for l in lines if l.strip()]
+
+    def test_wbs_level1_no_excluded(self):
+        """WBS level 1 must not contain excluded document types."""
+        wbs = self._load_wbs()
+        l1_titles = [n["title"] for n in wbs if n["level"] == 1]
+        for forbidden in EXPECTED["wbs_fix"]["level1_forbidden"]:
+            assert forbidden not in l1_titles, f"Excluded '{forbidden}' found at WBS level 1"
+
+    def test_wbs_has_required_branches(self):
+        """WBS must contain maintenance/training/exit branches."""
+        wbs = self._load_wbs()
+        all_titles = " ".join(n["title"] for n in wbs)
+        for kw in EXPECTED["wbs_fix"]["required_keywords"]:
+            assert kw in all_titles, f"Required keyword '{kw}' not found in WBS"
+
+    def test_work_items_only_from_allowed_subdocs(self):
+        """Extracted work items should only come from PRIMARY/SECONDARY subdocs."""
+        items = self._load_items()
+        allowed = set(EXPECTED["wbs_fix"]["work_item_allowed_subdocs"])
+        for it in items:
+            assert it["subdoc_id"] in allowed, (
+                f"item {it['item_id']} from excluded subdoc {it['subdoc_id']}"
+            )
+
+    def test_classifications_have_priority(self):
+        """All classifications must have a priority field."""
+        _require_stage(9, "09_classify")
+        classifications = json.loads(
+            (PROJECT_DIR / "09_classify" / "classifications.json").read_text(encoding="utf-8")
+        )
+        valid = {"PRIMARY", "SECONDARY", "EXCLUDED"}
+        for c in classifications:
+            assert "priority" in c, f"Missing priority for {c.get('section_id')}"
+            assert c["priority"] in valid, f"Invalid priority {c['priority']}"
