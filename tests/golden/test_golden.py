@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -151,14 +152,20 @@ class TestTables:
     def _load_tables(self):
         return json.loads((PROJECT_DIR / "07_table" / "tables.json").read_text(encoding="utf-8"))
 
-    def test_table_count(self):
+    def _captioned_tables(self):
+        """Return tables with '表N' captions (the 10 named tables in req spec)."""
+        import re
         tables = self._load_tables()
-        assert len(tables) == EXPECTED["tables"]["count"]
+        return [t for t in tables if re.search(r"表\s*\d+", t.get("caption", ""))]
+
+    def test_table_count(self):
+        captioned = self._captioned_tables()
+        assert len(captioned) == EXPECTED["tables"]["count"]
 
     def test_table5_cross_page(self):
-        tables = self._load_tables()
-        t5 = [t for t in tables if "5" in t.get("caption", "") or t.get("table_id", "").endswith("5")]
-        assert len(t5) >= 1
+        captioned = self._captioned_tables()
+        t5 = [t for t in captioned if re.search(r"表\s*5\s", t.get("caption", ""))]
+        assert len(t5) >= 1, f"Table 5 not found in {[t['caption'][:10] for t in captioned]}"
         t = t5[0]
         exp = EXPECTED["tables"]["table5"]
         assert t["page_start"] == exp["page_start"]
@@ -166,13 +173,12 @@ class TestTables:
         assert t["cross_page_merged"] is True
 
     def test_table5_no_duplicate_headers(self):
-        tables = self._load_tables()
-        t5 = [t for t in tables if "5" in t.get("caption", "") or t.get("table_id", "").endswith("5")]
+        captioned = self._captioned_tables()
+        t5 = [t for t in captioned if re.search(r"表\s*5\s", t.get("caption", ""))]
         assert len(t5) >= 1
         t = t5[0]
         header = t.get("header_row", [])
         rows = t.get("rows", [])
-        # Header row should not appear in data rows
         header_norm = [c.strip() for c in header]
         dup_count = sum(1 for r in rows if [c.strip() for c in r] == header_norm)
         assert dup_count == 0, f"Found {dup_count} duplicate header rows in table 5"
