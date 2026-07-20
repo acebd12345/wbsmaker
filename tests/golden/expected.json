@@ -1,0 +1,44 @@
+{
+  "total_pages": 309,
+  "quality": {
+    "NORMAL_TEXT": 164,
+    "IMAGE_ONLY": 10,
+    "GARBLED_TEXT": 135
+  },
+  "image_only_pages": [153, 154, 155, 156, 157, 158, 159, 160, 161, 162],
+  "garbled_pages_start": 174,
+  "garbled_pages_end": 308,
+  "subdoc_boundaries": [
+    {"title": "契約本文", "page_start": 1, "page_end": 47, "type": "CONTRACT_BODY"},
+    {"title": "附件", "page_start": 48, "page_end": 63, "type": "ATTACHMENT"},
+    {"title": "簽署頁", "page_start": 64, "page_end": 64, "type": "SIGNATURE_PAGE"},
+    {"title": "需求規範書", "page_start": 65, "page_end": 92, "type": "REQUIREMENT_SPECIFICATION"},
+    {"title": "投標須知", "page_start": 93, "page_end": 125, "type": "BID_INSTRUCTIONS"},
+    {"title": "評選須知", "page_start": 126, "page_end": 146, "type": "EVALUATION_GUIDELINES"},
+    {"title": "招標公告", "page_start": 147, "page_end": 152, "type": "TENDER_ANNOUNCEMENT"},
+    {"title": "掃描頁", "page_start": 153, "page_end": 162, "type": "SCANNED_PAGES"},
+    {"title": "法規文件", "page_start": 163, "page_end": 173, "type": "LAW_OR_POLICY"},
+    {"title": "服務建議書", "page_start": 174, "page_end": 308, "type": "SERVICE_PROPOSAL"}
+  ],
+  "subdoc_cut_points": [64, 65, 92, 93, 125, 126, 152, 153, 162, 163, 173, 174],
+  "requirement_spec": {
+    "subdoc_page_start": 65,
+    "subdoc_page_end": 92,
+    "chapter_count": 7,
+    "chapters": ["壹", "貳", "參", "肆", "伍", "陸", "柒"],
+    "chapter_1_2_same_page": 71,
+    "toc_page": 67
+  },
+  "tables": {
+    "count": 10,
+    "table5": {
+      "page_start": 80,
+      "page_end": 84,
+      "cross_page_merged": true,
+      "header": ["項次", "項目", "需求說明"]
+    }
+  },
+  "running_headers": {
+    "requirement_spec_has_chapter_headers": true
+  }
+}
