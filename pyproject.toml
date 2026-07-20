@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wbsgen"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pymupdf>=1.24",
+    "pdfplumber>=0.11",
+    "typer>=0.12",
+    "pydantic>=2.7",
+    "rich>=13.7",
+    "openpyxl>=3.1",
+    "openai>=1.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+wbs = "wbsgen.cli:app_entry"
+
+[tool.setuptools.packages.find]
+where = ["src"]

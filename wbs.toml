@@ -1,0 +1,26 @@
+[llm]
+base_url = "http://localhost:8000/v1"
+model = "gemma-4-31b-it"
+api_key = "internal"
+max_input_tokens = 60000
+temperature_extract = 0.0
+temperature_wbs = 0.1
+max_retries = 3
+mock = true
+
+[quality]
+min_chars = 30
+common_han_min = 0.55
+symbol_max = 0.50
+check_tounicode = true
+
+[layout]
+header_band = 0.12
+footer_band = 0.12
+min_consecutive_pages = 2
+
+[table]
+merge_confidence_min = 0.80
+
+[spec_anchors]
+names = ["需求規範書","需求規格書","工作說明書","採購需求說明","委託服務需求書","技術需求規格"]
