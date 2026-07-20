@@ -1,7 +1,9 @@
 [llm]
-base_url = "http://localhost:8000/v1"
-model = "gemma-4-31b-it"
-api_key = "internal"
+# 內網 vLLM 推論伺服器(2026-07-20 實測 /v1/models 存活,無需 API key)
+# max_model_len = 128000,單次輸入上限據此保守設定
+base_url = "https://INTERNAL-LLM-HOST/v1"
+model = "/main_model"
+api_key = "not-needed"
 max_input_tokens = 60000
 temperature_extract = 0.0
 temperature_wbs = 0.1
