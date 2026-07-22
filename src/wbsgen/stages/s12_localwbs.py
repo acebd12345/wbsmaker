@@ -122,13 +122,29 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
             llm_nodes = None
 
         if llm_nodes:
-            # Use LLM structure: create child nodes from LLM output
+            # LLM often returns a parent node with children titles AND separate
+            # nodes for those children. Nodes whose title appears in another
+            # node's children list become level-3 (with their work items),
+            # not duplicate level-2 siblings.
+            child_titles: set[str] = set()
             for ln in llm_nodes:
+                for t in ln.get("children", []):
+                    if isinstance(t, str) and t.strip():
+                        child_titles.add(t.strip())
+
+            level3_by_title: dict[str, WbsNode] = {}
+            deferred: list[dict] = []
+
+            for ln in llm_nodes:
+                title = ln.get("title", "").strip()
+                if title in child_titles:
+                    deferred.append(ln)
+                    continue
                 node_counter += 1
                 child_id = f"wbs-{node_counter}"
                 child = WbsNode(
                     node_id=child_id,
-                    title=ln.get("title", ""),
+                    title=title,
                     level=2,
                     parent_id=root_id,
                     work_items=ln.get("work_items", []),
@@ -137,20 +153,41 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
                 nodes.append(child)
                 root.children.append(child_id)
 
-                # Create level-3 children if present
                 for sub_title in ln.get("children", []):
                     if isinstance(sub_title, str) and sub_title.strip():
                         node_counter += 1
                         sub_id = f"wbs-{node_counter}"
                         sub_node = WbsNode(
                             node_id=sub_id,
-                            title=sub_title,
+                            title=sub_title.strip(),
                             level=3,
                             parent_id=child_id,
                             generation_type=GenerationType.INFERRED,
                         )
                         nodes.append(sub_node)
                         child.children.append(sub_id)
+                        level3_by_title[sub_title.strip()] = sub_node
+
+            # Attach deferred nodes' work items to their level-3 counterparts
+            for ln in deferred:
+                title = ln.get("title", "").strip()
+                target = level3_by_title.get(title)
+                if target is not None:
+                    target.work_items.extend(ln.get("work_items", []))
+                else:
+                    # Listed as a child but no parent created it — keep at level 2
+                    node_counter += 1
+                    child_id = f"wbs-{node_counter}"
+                    child = WbsNode(
+                        node_id=child_id,
+                        title=title,
+                        level=2,
+                        parent_id=root_id,
+                        work_items=ln.get("work_items", []),
+                        generation_type=GenerationType.INFERRED,
+                    )
+                    nodes.append(child)
+                    root.children.append(child_id)
         else:
             # Structured rule-based: group by section, attach work items
             for sec_id, sec_items in section_groups.items():
