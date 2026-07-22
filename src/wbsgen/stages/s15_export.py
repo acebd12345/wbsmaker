@@ -69,7 +69,91 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     coverage_path = out_dir / "coverage.txt"
     _write_coverage(coverage_path, proj_dir, wbs_nodes)
 
+    # 6. Interactive HTML (chart + list views, self-contained)
+    _export_html(out_dir / f"wbs_{version}_{timestamp}.html", proj_dir, cfg, wbs_data)
+
     return None
+
+
+def _export_html(path: Path, proj_dir: Path, cfg: dict, wbs_data: list[dict]):
+    """Inject pipeline data into the visualization template."""
+    template_path = Path(__file__).parent.parent / "templates" / "wbs_viz_template.html"
+    if not template_path.exists():
+        return
+
+    items_path = proj_dir / "10_extract" / "work_items.jsonl"
+    sections_path = proj_dir / "06_section" / "sections.json"
+    subdocs_path = proj_dir / "04_subdoc" / "subdocs.json"
+    quality_path = proj_dir / "02_quality" / "summary.json"
+    manifest_path = proj_dir / "manifest.json"
+
+    items: list[dict] = []
+    if items_path.exists():
+        for line in items_path.read_text(encoding="utf-8").strip().split("\n"):
+            if line.strip():
+                items.append(json.loads(line))
+
+    sections = json.loads(sections_path.read_text(encoding="utf-8")) if sections_path.exists() else []
+    subdocs = json.loads(subdocs_path.read_text(encoding="utf-8")) if subdocs_path.exists() else []
+    quality = json.loads(quality_path.read_text(encoding="utf-8")) if quality_path.exists() else {}
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+
+    sec_title = {s["section_id"]: s["title"] for s in sections}
+    subdoc_title = {s["subdoc_id"]: s.get("title", s["subdoc_id"]) for s in subdocs}
+    item_by_id = {i["item_id"]: i for i in items}
+
+    def slim(it: dict) -> dict:
+        return {
+            "id": it["item_id"],
+            "desc": it["description"],
+            "cat": it["category"],
+            "pages": sorted({p + 1 for p in it.get("source_pages", [])}),
+            "sec": sec_title.get(it["section_id"], it["section_id"]),
+        }
+
+    attached: set[str] = set()
+    nodes_out = []
+    for n in wbs_data:
+        attached.update(n.get("work_items", []))
+        nodes_out.append({
+            "id": n["node_id"],
+            "code": n.get("code", ""),
+            "title": n["title"],
+            "level": n["level"],
+            "parent": n.get("parent_id"),
+            "items": [slim(item_by_id[i]) for i in n.get("work_items", []) if i in item_by_id],
+        })
+
+    orphans: dict[str, list[dict]] = {}
+    for it in items:
+        if it["item_id"] in attached:
+            continue
+        branch = subdoc_title.get(it["subdoc_id"], it["subdoc_id"])
+        orphans.setdefault(branch, []).append(slim(it))
+
+    data = {
+        "meta": {
+            "project": manifest.get("project_id", proj_dir.name),
+            "total_pages": quality.get("total_pages"),
+            "garbled_pages": quality.get("garbled_text"),
+            "image_pages": quality.get("image_only"),
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "mode": "mock" if cfg.get("llm", {}).get("mock", True) else "real",
+        },
+        "nodes": nodes_out,
+        "orphans": orphans,
+        "stats": {
+            "total_items": len(items),
+            "attached": len(attached & set(item_by_id)),
+            "nodes": len(wbs_data),
+        },
+    }
+
+    html = template_path.read_text(encoding="utf-8")
+    # </script> inside JSON strings would terminate the script block early
+    payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    html = html.replace("__WBS_DATA__", payload, 1)
+    path.write_text(html, encoding="utf-8")
 
 
 def _export_xlsx(path: Path, nodes: list[WbsNode]):

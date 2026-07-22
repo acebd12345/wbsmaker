@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WBS 視覺化</title>
+<style>
+:root {
+  --paper: #f6f7f4;
+  --card: #fdfdfb;
+  --ink: #1c2430;
+  --ink-2: #4a5464;
+  --ink-3: #8b93a0;
+  --line: #dfe2da;
+  --line-2: #ecefe8;
+  --seal: #b5382f;
+  --seal-soft: #b5382f1a;
+  --chip-ink: #ffffff;
+  --c-work: #4a6fa5;
+  --c-deliverable: #2e7d6b;
+  --c-security: #7d5ba6;
+  --c-management: #a8783a;
+  --c-acceptance: #3e8a3e;
+  --c-payment: #9a6d1f;
+  --c-transition: #6d6a99;
+  --c-constraint: #8c5a4a;
+  --c-maintenance: #567d99;
+  --c-meeting: #7a7a52;
+  --c-quality: #3a8a8c;
+  --c-training: #b04a7a;
+  --c-other: #74797f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #14181f;
+    --card: #1b212b;
+    --ink: #e6e9ee;
+    --ink-2: #aab3c0;
+    --ink-3: #6d7684;
+    --line: #2c3442;
+    --line-2: #232a36;
+    --seal: #e06158;
+    --seal-soft: #e0615826;
+    --c-work: #7ba0d4;
+    --c-deliverable: #5cae9a;
+    --c-security: #ab8ad0;
+    --c-management: #cfa365;
+    --c-acceptance: #6fb56f;
+    --c-payment: #c99a45;
+    --c-transition: #9a97c7;
+    --c-constraint: #bb8674;
+    --c-maintenance: #83aac6;
+    --c-meeting: #a8a878;
+    --c-quality: #64b3b5;
+    --c-training: #d47ba3;
+    --c-other: #99a0a8;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #14181f; --card: #1b212b; --ink: #e6e9ee; --ink-2: #aab3c0; --ink-3: #6d7684;
+  --line: #2c3442; --line-2: #232a36; --seal: #e06158; --seal-soft: #e0615826;
+  --c-work: #7ba0d4; --c-deliverable: #5cae9a; --c-security: #ab8ad0; --c-management: #cfa365;
+  --c-acceptance: #6fb56f; --c-payment: #c99a45; --c-transition: #9a97c7; --c-constraint: #bb8674;
+  --c-maintenance: #83aac6; --c-meeting: #a8a878; --c-quality: #64b3b5; --c-training: #d47ba3; --c-other: #99a0a8;
+}
+:root[data-theme="light"] {
+  --paper: #f6f7f4; --card: #fdfdfb; --ink: #1c2430; --ink-2: #4a5464; --ink-3: #8b93a0;
+  --line: #dfe2da; --line-2: #ecefe8; --seal: #b5382f; --seal-soft: #b5382f1a;
+  --c-work: #4a6fa5; --c-deliverable: #2e7d6b; --c-security: #7d5ba6; --c-management: #a8783a;
+  --c-acceptance: #3e8a3e; --c-payment: #9a6d1f; --c-transition: #6d6a99; --c-constraint: #8c5a4a;
+  --c-maintenance: #567d99; --c-meeting: #7a7a52; --c-quality: #3a8a8c; --c-training: #b04a7a; --c-other: #74797f;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+
+/* ── Header ── */
+header { border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 20px; }
+.eyebrow {
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--seal); font-weight: 600; margin-bottom: 6px;
+}
+h1 {
+  font-family: "Noto Serif TC", "PMingLiU", "MingLiU", serif;
+  font-size: 26px; font-weight: 700; margin: 0 0 4px;
+  text-wrap: balance; letter-spacing: 0.02em;
+}
+.sub { color: var(--ink-2); font-size: 13px; }
+.sub code {
+  font-family: Consolas, "Courier New", monospace; font-size: 12px;
+  background: var(--line-2); padding: 1px 5px; border-radius: 3px;
+}
+
+/* ── Stats ── */
+.stats { display: flex; flex-wrap: wrap; gap: 28px; margin: 18px 0 14px; }
+.stat .num {
+  font-family: "Noto Serif TC", "PMingLiU", serif;
+  font-size: 30px; font-weight: 700; line-height: 1.15;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.stat .num.seal { color: var(--seal); }
+.stat .lbl { font-size: 12px; color: var(--ink-3); letter-spacing: 0.06em; }
+
+/* ── Category bar + legend ── */
+.catbar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; margin: 6px 0 10px; }
+.catbar div { min-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line); border-radius: 20px;
+  padding: 2px 10px 2px 7px; font-size: 12px; cursor: pointer;
+  background: var(--card); color: var(--ink-2); user-select: none;
+  transition: border-color .15s, opacity .15s;
+}
+.chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+.chip .n { font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 11px; }
+.chip:hover { border-color: var(--ink-3); }
+.chip.on { border-color: currentColor; color: var(--ink); background: var(--line-2); }
+.legend.filtering .chip:not(.on) { opacity: 0.45; }
+
+/* ── Toolbar ── */
+.toolbar { display: flex; gap: 10px; align-items: center; margin: 16px 0 12px; flex-wrap: wrap; }
+.search {
+  flex: 1; max-width: 340px; min-width: 160px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--card); color: var(--ink);
+  padding: 7px 12px; font-size: 13px; font-family: inherit;
+}
+.search:focus { outline: 2px solid var(--seal-soft); border-color: var(--seal); }
+.tbtn {
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-2);
+  border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.tbtn:hover { border-color: var(--ink-3); color: var(--ink); }
+.tbtn:focus-visible, .chip:focus-visible { outline: 2px solid var(--seal); outline-offset: 1px; }
+
+/* ── Tree (list view) ── */
+.branch {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 8px; margin-bottom: 14px; overflow: hidden;
+}
+.b-head {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 14px 18px; cursor: pointer; border-bottom: 1px solid var(--line-2);
+}
+.b-head:hover { background: var(--line-2); }
+.b-head .code {
+  font-family: "Noto Serif TC", "PMingLiU", serif; font-size: 22px; font-weight: 700;
+  color: var(--seal); font-variant-numeric: tabular-nums; min-width: 26px;
+}
+.b-head .t { font-family: "Noto Serif TC", "PMingLiU", serif; font-size: 19px; font-weight: 700; }
+.b-head .meta { margin-left: auto; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.n2 { border-top: 1px solid var(--line-2); }
+.n2-head { display: flex; align-items: baseline; gap: 10px; padding: 10px 18px 10px 30px; cursor: pointer; }
+.n2-head:hover { background: var(--line-2); }
+.n2-head .code { font-size: 13px; color: var(--ink-3); font-variant-numeric: tabular-nums; font-family: Consolas, monospace; min-width: 34px; }
+.n2-head .t { font-weight: 600; font-size: 14.5px; }
+.n2-head .meta { margin-left: auto; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.n3 { margin: 0 18px 8px 62px; border-left: 2px solid var(--line); }
+.n3-head { display: flex; align-items: baseline; gap: 8px; padding: 5px 10px 5px 12px; cursor: pointer; border-radius: 0 5px 5px 0; }
+.n3-head:hover { background: var(--line-2); }
+.n3-head .code { font-size: 12px; color: var(--ink-3); font-family: Consolas, monospace; font-variant-numeric: tabular-nums; min-width: 42px; }
+.n3-head .t { font-size: 13.5px; font-weight: 500; }
+.n3-head .meta { margin-left: auto; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.tw { color: var(--ink-3); font-size: 10px; width: 12px; display: inline-block; transition: transform .15s; transform: rotate(0deg); }
+.open > .b-head .tw, .open > .n2-head .tw, .open > .n3-head .tw { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .tw, .chip { transition: none; } }
+
+.items { list-style: none; margin: 0 0 6px; padding: 0 0 0 24px; }
+.item {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 3px 10px 3px 0; font-size: 13px; color: var(--ink-2);
+}
+.item.dim { opacity: 0.32; }
+.tag {
+  flex-shrink: 0; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  padding: 1px 7px; border-radius: 3px; color: var(--chip-ink);
+  min-width: 42px; text-align: center;
+}
+:root[data-theme="dark"] .tag { color: #10141a; }
+.item .pg {
+  margin-left: auto; flex-shrink: 0;
+  font-family: Consolas, monospace; font-size: 11px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.item mark { background: var(--seal-soft); color: inherit; border-radius: 2px; padding: 0 1px; }
+
+.orph > .n2-head .t { color: var(--ink-3); font-weight: 500; font-style: normal; }
+.orph .items { border-left: 2px dashed var(--line); margin-left: 48px; padding-left: 14px; }
+.orph .sect { font-size: 11px; color: var(--ink-3); margin: 8px 0 2px; letter-spacing: 0.04em; }
+
+.hidden { display: none; }
+.empty { padding: 8px 18px 14px 62px; color: var(--ink-3); font-size: 12.5px; }
+
+/* ── View tabs ── */
+#listTools { display: contents; }
+#listTools.hidden { display: none; }
+.viewtabs { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.vtab {
+  padding: 6px 16px; font-size: 12.5px; cursor: pointer; border: none;
+  background: var(--card); color: var(--ink-2); font-family: inherit;
+}
+.vtab.on { background: var(--ink); color: var(--paper); font-weight: 600; }
+.vtab:focus-visible { outline: 2px solid var(--seal); outline-offset: -2px; }
+
+/* ── Chart view (classic WBS box diagram) ── */
+.chart { overflow-x: auto; padding: 6px 2px 24px; }
+.chart-inner { min-width: 860px; }
+.chart-rootbox {
+  width: fit-content; margin: 0 auto; text-align: center;
+  border: 2px solid var(--ink); background: var(--card);
+  border-radius: 4px; padding: 8px 22px; position: relative;
+  font-family: "Noto Serif TC", "PMingLiU", serif; font-weight: 700; font-size: 16px;
+}
+.chart-rootbox .sub2 { font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; font-size: 11px; font-weight: 400; color: var(--ink-3); }
+.chart-rootbox::after {
+  content: ""; position: absolute; left: 50%; bottom: -22px;
+  width: 2px; height: 22px; background: var(--line); transform: translateX(-1px);
+}
+.cols { display: flex; gap: 26px; margin-top: 22px; position: relative; padding-top: 20px; }
+.cols::before {
+  content: ""; position: absolute; top: 0;
+  left: var(--rail-inset, 16.7%); right: var(--rail-inset, 16.7%);
+  border-top: 2px solid var(--line);
+}
+.col { flex: 1; min-width: 0; position: relative; }
+.col::before {
+  content: ""; position: absolute; top: -20px; left: 50%;
+  width: 2px; height: 20px; background: var(--line); transform: translateX(-1px);
+}
+.nbox {
+  border: 1.5px solid var(--line); background: var(--card);
+  border-radius: 4px; padding: 6px 10px; margin-bottom: 8px;
+}
+.nbox .bcode {
+  font-family: Consolas, monospace; font-size: 11px; color: var(--seal);
+  font-variant-numeric: tabular-nums; font-weight: 700; margin-right: 6px;
+}
+.nbox .bt { font-size: 13px; font-weight: 600; }
+.nbox .bn { float: right; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; margin-left: 8px; }
+.nbox .minibar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; margin-top: 5px; }
+.nbox .minibar div { min-width: 2px; }
+.l1box { border-width: 2px; border-color: var(--ink-2); text-align: center; padding: 8px 10px; }
+.l1box .bt { font-family: "Noto Serif TC", "PMingLiU", serif; font-size: 15px; font-weight: 700; }
+.l1box .bcode { font-size: 14px; }
+.l1box .bn { float: none; display: block; margin: 2px 0 0; }
+.kids { position: relative; margin-left: 14px; }
+.kids > .knode { position: relative; padding-left: 16px; }
+.kids > .knode::before {
+  content: ""; position: absolute; left: 0; top: -8px; bottom: 50%;
+  width: 13px; border-left: 2px solid var(--line); border-bottom: 2px solid var(--line);
+  border-bottom-left-radius: 3px;
+}
+.kids > .knode:not(:last-child)::after {
+  content: ""; position: absolute; left: 0; top: 50%; bottom: -8px;
+  border-left: 2px solid var(--line);
+}
+.l3grp .nbox { border-style: solid; padding: 4px 9px; }
+.l3grp .bt { font-size: 12px; font-weight: 500; }
+
+footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12px; }
+footer .sq { color: var(--seal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow" id="eyebrow">Work Breakdown Structure</div>
+  <h1 id="h1t">工作分解結構</h1>
+  <div class="sub" id="subline"></div>
+  <div class="stats" id="stats"></div>
+  <div class="catbar" id="catbar"></div>
+  <div class="legend" id="legend"></div>
+</header>
+
+<div class="toolbar">
+  <div class="viewtabs" role="tablist">
+    <button class="vtab on" id="tabChart" role="tab" aria-selected="true">樹狀圖</button>
+    <button class="vtab" id="tabList" role="tab" aria-selected="false">明細清單</button>
+  </div>
+  <span id="listTools" class="hidden">
+    <input class="search" id="q" type="search" placeholder="搜尋工作項…" aria-label="搜尋工作項">
+    <button class="tbtn" id="expandAll">全部展開</button>
+    <button class="tbtn" id="collapseAll">全部收合</button>
+  </span>
+</div>
+
+<div class="chart" id="chart"></div>
+<div id="tree" class="hidden"></div>
+
+<footer>
+  <span class="sq">■</span> 每個工作項的頁碼可回溯至 PDF 原文 ·
+  「待歸入」為已抽取但 LLM 分群未引用的項目 ·
+  由 <code>wbs</code> 管線自動產出
+</footer>
+</div>
+
+<script>
+const DATA = __WBS_DATA__;
+
+const CAT = {
+  WORK:              { l: "工作",   v: "--c-work" },
+  DELIVERABLE:       { l: "交付物", v: "--c-deliverable" },
+  SECURITY_ACTIVITY: { l: "資安",   v: "--c-security" },
+  MANAGEMENT:        { l: "管理",   v: "--c-management" },
+  ACCEPTANCE:        { l: "驗收",   v: "--c-acceptance" },
+  PAYMENT:           { l: "付款",   v: "--c-payment" },
+  TRANSITION:        { l: "退場",   v: "--c-transition" },
+  CONSTRAINT:        { l: "限制",   v: "--c-constraint" },
+  MAINTENANCE:       { l: "維運",   v: "--c-maintenance" },
+  MEETING:           { l: "會議",   v: "--c-meeting" },
+  QUALITY:           { l: "品質",   v: "--c-quality" },
+  TRAINING:          { l: "訓練",   v: "--c-training" },
+  SCOPE:             { l: "範疇",   v: "--c-other" },
+  MILESTONE:         { l: "里程碑", v: "--c-payment" },
+  UNCLASSIFIED:      { l: "未分類", v: "--c-other" },
+};
+const catInfo = c => CAT[c] || { l: c, v: "--c-other" };
+const cvar = c => `var(${catInfo(c).v})`;
+
+// ── header from meta ──
+const meta = DATA.meta || {};
+document.title = (meta.project || "WBS") + " — WBS 視覺化";
+document.getElementById("eyebrow").textContent =
+  "Work Breakdown Structure · " + (meta.mode === "real" ? "真模型產出" : meta.mode === "mock" ? "Mock 產出" : "管線產出");
+document.getElementById("h1t").textContent = (meta.project || "契約") + " — 工作分解結構";
+{
+  const parts = [];
+  if (meta.project) parts.push(`專案 <code>${meta.project}</code>` + (meta.total_pages ? `(${meta.total_pages} 頁)` : ""));
+  if (meta.date) parts.push(meta.date);
+  if (meta.garbled_pages || meta.image_pages)
+    parts.push(`亂碼 ${meta.garbled_pages || 0} 頁與掃描 ${meta.image_pages || 0} 頁未進入 LLM`);
+  document.getElementById("subline").innerHTML = parts.join(" · ");
+}
+
+// ── index data ──
+const byId = {}, kids = {};
+DATA.nodes.forEach(n => { byId[n.id] = n; });
+DATA.nodes.forEach(n => {
+  if (n.parent && byId[n.parent]) (kids[n.parent] = kids[n.parent] || []).push(n);
+});
+const roots = DATA.nodes.filter(n => n.level === 1);
+const allItems = [];
+DATA.nodes.forEach(n => n.items.forEach(it => allItems.push(it)));
+Object.values(DATA.orphans || {}).forEach(g => g.forEach(it => allItems.push(it)));
+
+// ── stats ──
+const catCount = {};
+allItems.forEach(it => { catCount[it.cat] = (catCount[it.cat] || 0) + 1; });
+const attached = DATA.stats.attached, total = DATA.stats.total_items;
+const maxLevel = Math.max(...DATA.nodes.map(n => n.level));
+
+document.getElementById("stats").innerHTML = `
+  <div class="stat"><div class="num seal">${total}</div><div class="lbl">工作項</div></div>
+  <div class="stat"><div class="num">${DATA.stats.nodes}</div><div class="lbl">WBS 節點 · ${maxLevel} 層</div></div>
+  <div class="stat"><div class="num">${attached}</div><div class="lbl">已歸入節點</div></div>
+  <div class="stat"><div class="num">${total - attached}</div><div class="lbl">待歸入</div></div>
+  <div class="stat"><div class="num">${Object.keys(catCount).length}</div><div class="lbl">類別</div></div>`;
+
+// ── category bar + legend (clickable filter) ──
+const activeCats = new Set();
+const sorted = Object.entries(catCount).sort((a, b) => b[1] - a[1]);
+document.getElementById("catbar").innerHTML = sorted
+  .map(([c, n]) => `<div style="flex:${n};background:${cvar(c)}" title="${catInfo(c).l} ${n}"></div>`).join("");
+const legend = document.getElementById("legend");
+legend.innerHTML = sorted.map(([c, n]) =>
+  `<button class="chip" data-cat="${c}" aria-pressed="false">
+     <span class="dot" style="background:${cvar(c)}"></span>${catInfo(c).l}<span class="n">${n}</span>
+   </button>`).join("");
+legend.addEventListener("click", e => {
+  const b = e.target.closest(".chip");
+  if (!b) return;
+  const c = b.dataset.cat;
+  activeCats.has(c) ? activeCats.delete(c) : activeCats.add(c);
+  b.classList.toggle("on");
+  b.setAttribute("aria-pressed", activeCats.has(c));
+  legend.classList.toggle("filtering", activeCats.size > 0);
+  applyFilter();
+});
+
+// ── render list view ──
+const esc = s => String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+const countItems = n => (n.items ? n.items.length : 0) + (kids[n.id] || []).reduce((a, k) => a + countItems(k), 0);
+
+function itemLi(it) {
+  const pg = it.pages.length ? "p" + it.pages.join(",") : "";
+  return `<li class="item" data-cat="${it.cat}" data-txt="${esc(it.desc.toLowerCase())}">
+    <span class="tag" style="background:${cvar(it.cat)}">${catInfo(it.cat).l}</span>
+    <span class="d">${esc(it.desc)}</span><span class="pg">${pg}</span></li>`;
+}
+
+function n3Html(n) {
+  return `<div class="n3 open" data-node>
+    <div class="n3-head" role="button" tabindex="0" aria-expanded="true">
+      <span class="tw">▶</span><span class="code">${n.code}</span>
+      <span class="t">${esc(n.title)}</span><span class="meta">${n.items.length} 項</span>
+    </div>
+    <ul class="items">${n.items.map(itemLi).join("")}</ul>
+  </div>`;
+}
+
+function n2Html(n) {
+  const c = kids[n.id] || [];
+  const own = n.items.length ? `<ul class="items" style="padding-left:46px">${n.items.map(itemLi).join("")}</ul>` : "";
+  return `<div class="n2 open" data-node>
+    <div class="n2-head" role="button" tabindex="0" aria-expanded="true">
+      <span class="tw">▶</span><span class="code">${n.code}</span>
+      <span class="t">${esc(n.title)}</span><span class="meta">${countItems(n)} 項</span>
+    </div>
+    <div class="body">${own}${c.map(n3Html).join("")}</div>
+  </div>`;
+}
+
+function orphanHtml(branchTitle) {
+  const g = (DATA.orphans || {})[branchTitle];
+  if (!g || !g.length) return "";
+  const bySec = {};
+  g.forEach(it => (bySec[it.sec] = bySec[it.sec] || []).push(it));
+  const inner = Object.entries(bySec)
+    .map(([s, its]) => `<div class="sect">${esc(s)}</div>` + its.map(itemLi).join(""))
+    .join("");
+  return `<div class="n2 orph" data-node>
+    <div class="n2-head" role="button" tabindex="0" aria-expanded="false">
+      <span class="tw">▶</span><span class="code">…</span>
+      <span class="t">待歸入的工作項</span><span class="meta">${g.length} 項</span>
+    </div>
+    <div class="body hidden"><ul class="items">${inner}</ul></div>
+  </div>`;
+}
+
+document.getElementById("tree").innerHTML = roots.map(r => {
+  const c = kids[r.id] || [];
+  const orphN = ((DATA.orphans || {})[r.title] || []).length;
+  return `<section class="branch open" data-node>
+    <div class="b-head" role="button" tabindex="0" aria-expanded="true">
+      <span class="tw">▶</span><span class="code">${r.code}</span>
+      <span class="t">${esc(r.title)}</span>
+      <span class="meta">${countItems(r)} 項已歸入 · ${orphN} 項待歸入</span>
+    </div>
+    <div class="body">${c.map(n2Html).join("")}${orphanHtml(r.title)}</div>
+  </section>`;
+}).join("");
+
+// ── chart view (classic WBS box diagram) ──
+function miniBar(items) {
+  if (!items.length) return "";
+  const c = {};
+  items.forEach(it => { c[it.cat] = (c[it.cat] || 0) + 1; });
+  const segs = Object.entries(c).sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `<div style="flex:${n};background:${cvar(k)}" title="${catInfo(k).l} ${n}"></div>`).join("");
+  return `<div class="minibar">${segs}</div>`;
+}
+function allItemsOf(n) {
+  return (n.items || []).concat((kids[n.id] || []).flatMap(allItemsOf));
+}
+function chartBox(n, cls) {
+  const its = allItemsOf(n);
+  return `<div class="nbox ${cls}">
+    <span class="bcode">${n.code}</span><span class="bt">${esc(n.title)}</span>
+    <span class="bn">${its.length} 項</span>${miniBar(its)}</div>`;
+}
+{
+  const railInset = roots.length > 1 ? (100 / (roots.length * 2)).toFixed(2) + "%" : "50%";
+  document.getElementById("chart").innerHTML = `<div class="chart-inner">
+    <div class="chart-rootbox">${esc(meta.project || "契約")} WBS
+      <div class="sub2">${total} 工作項 · ${meta.mode === "real" ? "真模型產出" : "管線產出"}</div></div>
+    <div class="cols" style="--rail-inset:${railInset}">${roots.map(r => `
+      <div class="col">
+        ${chartBox(r, "l1box")}
+        <div class="kids">${(kids[r.id] || []).map(n2 => `
+          <div class="knode">
+            ${chartBox(n2, "")}
+            <div class="kids l3grp">${(kids[n2.id] || []).map(n3 =>
+              `<div class="knode">${chartBox(n3, "")}</div>`).join("")}</div>
+          </div>`).join("")}
+        </div>
+      </div>`).join("")}
+    </div></div>`;
+}
+
+// ── view tabs ──
+const tabChart = document.getElementById("tabChart");
+const tabList = document.getElementById("tabList");
+function setView(chart) {
+  document.getElementById("chart").classList.toggle("hidden", !chart);
+  document.getElementById("tree").classList.toggle("hidden", chart);
+  document.getElementById("listTools").classList.toggle("hidden", chart);
+  tabChart.classList.toggle("on", chart);
+  tabList.classList.toggle("on", !chart);
+  tabChart.setAttribute("aria-selected", chart);
+  tabList.setAttribute("aria-selected", !chart);
+}
+tabChart.onclick = () => setView(true);
+tabList.onclick = () => setView(false);
+
+// ── expand / collapse ──
+function setOpen(node, open) {
+  node.classList.toggle("open", open);
+  const head = node.querySelector(":scope > .b-head, :scope > .n2-head, :scope > .n3-head");
+  if (head) head.setAttribute("aria-expanded", open);
+  const body = node.querySelector(":scope > .body, :scope > .items");
+  if (body) body.classList.toggle("hidden", !open);
+}
+document.getElementById("tree").addEventListener("click", e => {
+  const head = e.target.closest(".b-head, .n2-head, .n3-head");
+  if (!head) return;
+  const node = head.parentElement;
+  setOpen(node, !node.classList.contains("open"));
+});
+document.getElementById("tree").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const head = e.target.closest(".b-head, .n2-head, .n3-head");
+  if (!head) return;
+  e.preventDefault();
+  setOpen(head.parentElement, !head.parentElement.classList.contains("open"));
+});
+document.getElementById("expandAll").onclick = () =>
+  document.querySelectorAll("[data-node]").forEach(n => setOpen(n, true));
+document.getElementById("collapseAll").onclick = () =>
+  document.querySelectorAll(".n3, .n2").forEach(n => setOpen(n, false));
+
+// ── filter: category chips + text search ──
+const q = document.getElementById("q");
+q.addEventListener("input", applyFilter);
+
+function applyFilter() {
+  const text = q.value.trim().toLowerCase();
+  const filtering = text || activeCats.size;
+  document.querySelectorAll(".item").forEach(li => {
+    const okCat = !activeCats.size || activeCats.has(li.dataset.cat);
+    const okTxt = !text || li.dataset.txt.includes(text);
+    li.classList.toggle("dim", filtering && !(okCat && okTxt));
+    const d = li.querySelector(".d");
+    const raw = d.textContent;
+    if (text && okTxt && okCat) {
+      const i = raw.toLowerCase().indexOf(text);
+      if (i >= 0) d.innerHTML = esc(raw.slice(0, i)) + "<mark>" + esc(raw.slice(i, i + text.length)) + "</mark>" + esc(raw.slice(i + text.length));
+    } else d.textContent = raw;
+  });
+  if (filtering) document.querySelectorAll("[data-node]").forEach(n => {
+    const hasHit = [...n.querySelectorAll(".item")].some(li => !li.classList.contains("dim"));
+    if (hasHit) setOpen(n, true);
+  });
+}
+</script>
+</body>
+</html>
