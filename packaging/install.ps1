@@ -35,7 +35,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 Write-Host "安裝完成!" -ForegroundColor Green
 Write-Host ""
-Write-Host "快速開始(以樣本契約為例):"
-Write-Host "  .\.venv\Scripts\wbs.exe auto sample\contract_11108.pdf" -ForegroundColor Yellow
+Write-Host "快速開始:"
+Write-Host "  .\.venv\Scripts\wbs.exe auto C:\path\to\契約.pdf" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "詳細說明請看 README_測試說明.md"
