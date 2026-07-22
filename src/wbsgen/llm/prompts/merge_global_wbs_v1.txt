@@ -1,4 +1,11 @@
-You are a WBS expert. Merge multiple local WBS trees into a single global WBS.
-Preserve MANUAL and locked nodes. Assign WBS codes (1, 1.1, 1.1.1, etc.).
+你是一位 WBS 專家。請合併以下多個局部 WBS 為一個全案 WBS。
 
-Return JSON: {"nodes": [{"code": "1", "title": "...", "level": 1, "children": [...]}]}
+規則：
+1. 所有 title 一律使用繁體中文。
+2. 合併語意重複的節點。
+3. 保留 MANUAL 和 locked 節點不變。
+4. 指定 WBS 編碼（1, 1.1, 1.1.1 等）。
+5. 確保工作與交付成果、驗收節點、付款里程碑之間的關係合理。
+
+回傳格式：
+{"nodes": [{"code": "1", "title": "繁體中文標題", "level": 1, "children": ["1.1", "1.2"]}]}

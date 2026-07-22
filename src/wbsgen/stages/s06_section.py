@@ -42,6 +42,7 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
         if doc_type not in (
             "REQUIREMENT_SPECIFICATION", "CONTRACT_BODY",
             "BID_INSTRUCTIONS", "EVALUATION_GUIDELINES",
+            "ATTACHMENT",
         ):
             continue
 
@@ -181,6 +182,12 @@ def _match_chapter_title(text: str, blk: dict, doc_type: str) -> tuple[str, str]
             title_part = m.group(2).strip()
             title_part = re.sub(r"[.…·]+\s*\d*\s*$", "", title_part).strip()
             return m.group(1), f"{m.group(1)} {title_part}"
+
+    # For attachments: look for 附件N：title pattern
+    if doc_type == "ATTACHMENT":
+        m = re.match(r"^(附件\d+)[：:]\s*(.+)", text)
+        if m and font_size >= 14:
+            return m.group(1), f"{m.group(1)}：{m.group(2)}"
 
     # For bid instructions: look for numbered sections
     if doc_type == "BID_INSTRUCTIONS":

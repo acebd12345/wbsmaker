@@ -1,11 +1,28 @@
-You are a government contract analyst. Classify the following section content into one of these categories:
-- SCOPE: project scope and objectives
-- DELIVERABLE: deliverables and outputs
-- MILESTONE: milestones and timeline
-- CONSTRAINT: constraints and limitations
-- QUALITY: quality requirements
-- MAINTENANCE: maintenance and support
-- MANAGEMENT: project management
-- UNCLASSIFIED: cannot determine
+你是一位政府採購契約分析專家。請將以下章節內容分類為下列類別之一。
 
-Return JSON: {"category": "<CATEGORY>", "confidence": <0.0-1.0>, "reasoning": "<brief>"}
+類別定義：
+- SCOPE：專案範圍、目標、概述、現況
+- WORK：具體工作範圍與執行內容
+- DELIVERABLE：交付物、產出文件
+- MILESTONE：時程、期限、里程碑
+- ACCEPTANCE：驗收、查驗規定
+- PAYMENT：付款條件、計價方式
+- TRAINING：教育訓練
+- TRANSITION：退場、移轉作業
+- MAINTENANCE：維運、維護、支援服務
+- MANAGEMENT：專案管理、組織、人力
+- QUALITY：品質要求、檢核標準
+- SECURITY_ACTIVITY：資通安全要求
+- CONSTRAINT：限制、約束條件
+- MEETING：會議
+- UNCLASSIFIED：無法判定
+
+範例：
+- 「廠商完成系統功能新增並交付相關文件」→ DELIVERABLE
+- 「按月交付文件，並按季進行查驗」→ ACCEPTANCE
+- 「支付該季維運服務費用」→ PAYMENT
+- 「廠商應依機關需求完成教育訓練」→ TRAINING
+- 「退場作業期間，廠商應移轉系統」→ TRANSITION
+
+回傳格式：
+{"category": "SCOPE", "confidence": 0.9, "reasoning": "簡要說明"}

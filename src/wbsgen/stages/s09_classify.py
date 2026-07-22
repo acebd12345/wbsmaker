@@ -8,6 +8,8 @@ from pathlib import Path
 from ..llm.client import LLMClient
 from ..models import ContentCategory, PageQuality
 
+CATEGORY_ENUM = [c.value for c in ContentCategory]
+
 
 def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     sections_path = proj_dir / "06_section" / "sections.json"
@@ -22,7 +24,6 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     tables = json.loads(tables_path.read_text(encoding="utf-8"))
     subdocs = json.loads(subdocs_path.read_text(encoding="utf-8"))
 
-    # Load quality to verify no garbled/image pages in input
     qualities = {}
     for line in quality_path.read_text(encoding="utf-8").strip().split("\n"):
         q = json.loads(line)
@@ -32,7 +33,6 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     prompt_path = Path(__file__).parent.parent / "llm" / "prompts" / "classify_content_v1.txt"
     system_prompt = prompt_path.read_text(encoding="utf-8")
 
-    # Subdoc types that are EXCLUDED by default (DESIGN.md section 14)
     EXCLUDED_DOC_TYPES = {
         "BID_INSTRUCTIONS", "EVALUATION_GUIDELINES",
         "TENDER_ANNOUNCEMENT", "LAW_OR_POLICY",
@@ -41,7 +41,6 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     classifications = []
 
     for sec in sections:
-        # Skip sections in garbled/scanned subdocs
         subdoc = _find_subdoc(sec["subdoc_id"], subdocs)
         if subdoc and subdoc["doc_type"] in ("SERVICE_PROPOSAL", "SCANNED_PAGES"):
             continue
@@ -49,7 +48,7 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
         # Rule-based classification
         category = _rule_classify(sec, tables)
 
-        # Determine priority based on subdoc type (Fix 3)
+        # Determine priority based on subdoc type
         priority = "PRIMARY"
         wbs_relevance = 0.8
         if subdoc and subdoc["doc_type"] in EXCLUDED_DOC_TYPES:
@@ -62,29 +61,32 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
             priority = "SECONDARY"
             wbs_relevance = 0.6
         elif subdoc and subdoc["doc_type"] == "ATTACHMENT":
-            # Attachments with work/delivery/acceptance content are PRIMARY
-            if category in (ContentCategory.DELIVERABLE.value, ContentCategory.QUALITY.value,
-                           ContentCategory.MILESTONE.value, ContentCategory.MAINTENANCE.value):
+            # Round3-4: Attachments with payment/acceptance/delivery content are PRIMARY
+            if category in (
+                ContentCategory.DELIVERABLE.value, ContentCategory.QUALITY.value,
+                ContentCategory.MILESTONE.value, ContentCategory.MAINTENANCE.value,
+                ContentCategory.ACCEPTANCE.value, ContentCategory.PAYMENT.value,
+                ContentCategory.TRAINING.value, ContentCategory.TRANSITION.value,
+            ):
                 priority = "PRIMARY"
-                wbs_relevance = 0.85
+                wbs_relevance = 0.90
             else:
                 priority = "SECONDARY"
                 wbs_relevance = 0.5
 
-        # Read assembled content (skip garbled/image pages)
+        # Read assembled content
         md_path = assemble_dir / f"{sec['section_id']}.md"
         content = ""
         if md_path.exists():
             content = md_path.read_text(encoding="utf-8")
 
-        # Verify no garbled content in input
-        has_garbled = False
-        for pi in range(sec["start_page"], sec["end_page"] + 1):
-            if qualities.get(pi) in (PageQuality.GARBLED_TEXT.value, PageQuality.IMAGE_ONLY.value):
-                has_garbled = True
-                break
+        has_garbled = any(
+            qualities.get(pi) in (PageQuality.GARBLED_TEXT.value, PageQuality.IMAGE_ONLY.value)
+            for pi in range(sec["start_page"], sec["end_page"] + 1)
+        )
 
-        # LLM confirmation — only for non-EXCLUDED sections
+        # LLM confirmation for non-EXCLUDED sections
+        final = category
         if content and not has_garbled and priority != "EXCLUDED":
             try:
                 llm_result = client.generate_json(
@@ -93,21 +95,19 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
                     schema={
                         "type": "object",
                         "properties": {
-                            "category": {"type": "string", "enum": [c.value for c in ContentCategory]},
+                            "category": {"type": "string", "enum": CATEGORY_ENUM},
                             "confidence": {"type": "number"},
                             "reasoning": {"type": "string"},
                         },
                     },
                 )
-                llm_category = llm_result.get("category", category)
-                if category != ContentCategory.UNCLASSIFIED.value:
-                    final = category
+                llm_cat = llm_result.get("category", category)
+                if category == ContentCategory.UNCLASSIFIED.value:
+                    final = llm_cat
                 else:
-                    final = llm_category
+                    final = category
             except RuntimeError:
                 final = category
-        else:
-            final = category
 
         classifications.append({
             "section_id": sec["section_id"],
@@ -138,7 +138,16 @@ def _rule_classify(sec: dict, tables: list[dict]) -> str:
     title = sec.get("title", "")
     title_norm = re.sub(r"\s+", "", title)
 
-    # Keyword patterns
+    # Payment/acceptance patterns (Round3-4)
+    if re.search(r"價金|給付|付款|計價|費用", title_norm):
+        return ContentCategory.PAYMENT.value
+    if re.search(r"驗收|查驗", title_norm):
+        return ContentCategory.ACCEPTANCE.value
+    if re.search(r"訓練|教育", title_norm):
+        return ContentCategory.TRAINING.value
+    if re.search(r"退場|移轉", title_norm):
+        return ContentCategory.TRANSITION.value
+
     if re.search(r"目標|範圍|概述|背景", title_norm):
         return ContentCategory.SCOPE.value
     if re.search(r"維運|維護|保養|支援", title_norm):
@@ -147,17 +156,15 @@ def _rule_classify(sec: dict, tables: list[dict]) -> str:
         return ContentCategory.DELIVERABLE.value
     if re.search(r"時程|期限|里程碑", title_norm):
         return ContentCategory.MILESTONE.value
-    if re.search(r"品質|驗收|檢核", title_norm):
+    if re.search(r"品質|檢核", title_norm):
         return ContentCategory.QUALITY.value
     if re.search(r"管理|組織|人力", title_norm):
         return ContentCategory.MANAGEMENT.value
     if re.search(r"限制|約束|條件", title_norm):
         return ContentCategory.CONSTRAINT.value
+    if re.search(r"安全|資安", title_norm):
+        return ContentCategory.SECURITY_ACTIVITY.value
     if re.search(r"功能|系統|新增|異動", title_norm):
         return ContentCategory.SCOPE.value
-    if re.search(r"訓練|教育", title_norm):
-        return ContentCategory.MANAGEMENT.value
-    if re.search(r"退場|移轉", title_norm):
-        return ContentCategory.DELIVERABLE.value
 
     return ContentCategory.UNCLASSIFIED.value

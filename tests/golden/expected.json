@@ -42,14 +42,14 @@
     "requirement_spec_has_chapter_headers": true
   },
   "sections_fix": {
-    "total_section_count": 54,
+    "total_section_count": 64,
     "contract_body_section_count": 21,
     "contract_body_page_range": [2, 47]
   },
   "wbs_fix": {
-    "level1_allowed": ["契約本文", "需求規範書"],
+    "level1_allowed": ["契約本文", "需求規範書", "附件"],
     "level1_forbidden": ["投標須知", "評選須知", "招標公告", "法規文件"],
     "required_keywords": ["維運", "教育訓練", "退場"],
-    "work_item_allowed_subdocs": ["subdoc-001", "subdoc-004"]
+    "work_item_allowed_subdocs": ["subdoc-001", "subdoc-002", "subdoc-004"]
   }
 }
