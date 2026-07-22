@@ -24,3 +24,6 @@ wbs = "wbsgen.cli:app_entry"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+wbsgen = ["templates/*.html", "llm/prompts/*.txt"]

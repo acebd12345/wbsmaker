@@ -9,3 +9,5 @@ build/
 data/
 .pytest_cache/
 tests/golden/*.pdf
+dist_pkg/
+wbs_package_*.zip
