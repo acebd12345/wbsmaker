@@ -194,6 +194,8 @@ h1 {
   font-family: Consolas, monospace; font-size: 11px; color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
+.item .pg a { color: var(--seal); text-decoration: none; }
+.item .pg a:hover, .item .pg a:focus-visible { text-decoration: underline; }
 .item mark { background: var(--seal-soft); color: inherit; border-radius: 2px; padding: 0 1px; }
 
 .orph > .n2-head .t { color: var(--ink-3); font-weight: 500; font-style: normal; }
@@ -406,7 +408,15 @@ const esc = s => String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;",
 const countItems = n => (n.items ? n.items.length : 0) + (kids[n.id] || []).reduce((a, k) => a + countItems(k), 0);
 
 function itemLi(it) {
-  const pg = it.pages.length ? "p" + it.pages.join(",") : "";
+  let pg = "";
+  if (it.pages.length) {
+    const nums = meta.pdf_href
+      ? it.pages.map(p =>
+          `<a href="${esc(meta.pdf_href)}#page=${p}" target="_blank" rel="noopener" title="開啟 PDF 第 ${p} 頁">${p}</a>`
+        ).join(",")
+      : it.pages.join(",");
+    pg = "p" + nums;
+  }
   return `<li class="item" data-cat="${it.cat}" data-txt="${esc(it.desc.toLowerCase())}">
     <span class="tag" style="background:${cvar(it.cat)}">${catInfo(it.cat).l}</span>
     <span class="d">${esc(it.desc)}</span><span class="pg">${pg}</span></li>`;

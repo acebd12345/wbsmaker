@@ -139,6 +139,13 @@ def _export_html(path: Path, proj_dir: Path, cfg: dict, wbs_data: list[dict]):
             "image_pages": quality.get("image_only"),
             "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "mode": "mock" if cfg.get("llm", {}).get("mock", True) else "real",
+            # relative link from exports/ to the ingested PDF; page numbers
+            # become "open PDF at page N" links when it exists
+            "pdf_href": (
+                "../original/contract.pdf"
+                if (proj_dir / "original" / "contract.pdf").exists()
+                else None
+            ),
         },
         "nodes": nodes_out,
         "orphans": orphans,
