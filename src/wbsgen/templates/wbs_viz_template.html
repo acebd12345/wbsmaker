@@ -182,7 +182,7 @@ h1 {
   display: flex; align-items: baseline; gap: 8px;
   padding: 3px 10px 3px 0; font-size: 13px; color: var(--ink-2);
 }
-.item.dim { opacity: 0.32; }
+.item.dim { display: none; }
 .tag {
   flex-shrink: 0; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
   padding: 1px 7px; border-radius: 3px; color: var(--chip-ink);
@@ -476,8 +476,7 @@ function miniBar(items) {
 function allItemsOf(n) {
   return (n.items || []).concat((kids[n.id] || []).flatMap(allItemsOf));
 }
-function chartBox(n, cls) {
-  const its = allItemsOf(n);
+function chartBox(n, cls, its) {
   const has = its.length > 0;
   const list = has
     ? `<ul class="items box-items hidden">${its.map(itemLi).join("")}</ul>`
@@ -486,24 +485,36 @@ function chartBox(n, cls) {
     <span class="bcode">${n.code}</span><span class="bt">${esc(n.title)}</span>
     <span class="bn">${its.length} 項${has ? '<span class="tgl">▾</span>' : ""}</span>${miniBar(its)}${list}</div>`;
 }
-{
+
+// pred: item filter; when set, boxes without matching items disappear
+// and counts show matched items only
+function renderChart(pred) {
+  const keep = pred || (() => true);
   const railInset = roots.length > 1 ? (100 / (roots.length * 2)).toFixed(2) + "%" : "50%";
+  const shown = allItems.filter(keep).length;
   document.getElementById("chart").innerHTML = `<div class="chart-inner">
     <div class="chart-rootbox">${esc(meta.project || "契約")} WBS
-      <div class="sub2">${total} 工作項 · ${meta.mode === "real" ? "真模型產出" : "管線產出"}</div></div>
+      <div class="sub2">${pred ? `過濾中:${shown} / ${total} 工作項` : `${total} 工作項 · ${meta.mode === "real" ? "真模型產出" : "管線產出"}`}</div></div>
     <div class="cols" style="--rail-inset:${railInset}">${roots.map(r => `
       <div class="col">
-        ${chartBox(r, "l1box")}
-        <div class="kids">${(kids[r.id] || []).map(n2 => `
-          <div class="knode">
-            ${chartBox(n2, "")}
-            <div class="kids l3grp">${(kids[n2.id] || []).map(n3 =>
-              `<div class="knode">${chartBox(n3, "")}</div>`).join("")}</div>
-          </div>`).join("")}
+        ${chartBox(r, "l1box", allItemsOf(r).filter(keep))}
+        <div class="kids">${(kids[r.id] || []).map(n2 => {
+          const n2Its = allItemsOf(n2).filter(keep);
+          if (pred && !n2Its.length) return "";
+          return `<div class="knode">
+            ${chartBox(n2, "", n2Its)}
+            <div class="kids l3grp">${(kids[n2.id] || []).map(n3 => {
+              const n3Its = allItemsOf(n3).filter(keep);
+              if (pred && !n3Its.length) return "";
+              return `<div class="knode">${chartBox(n3, "", n3Its)}</div>`;
+            }).join("")}</div>
+          </div>`;
+        }).join("")}
         </div>
       </div>`).join("")}
     </div></div>`;
 }
+renderChart(null);
 
 // chart box click → toggle its item list (ignore clicks on the list itself)
 function toggleBox(box) {
@@ -572,7 +583,15 @@ q.addEventListener("input", applyFilter);
 function applyFilter() {
   const text = q.value.trim().toLowerCase();
   const filtering = text || activeCats.size;
-  document.querySelectorAll(".item").forEach(li => {
+  const pred = it =>
+    (!activeCats.size || activeCats.has(it.cat)) &&
+    (!text || it.desc.toLowerCase().includes(text));
+
+  // chart view: rebuild showing only matching boxes/items
+  renderChart(filtering ? pred : null);
+
+  // list view: hide non-matching items, then hide nodes left empty
+  document.querySelectorAll("#tree .item").forEach(li => {
     const okCat = !activeCats.size || activeCats.has(li.dataset.cat);
     const okTxt = !text || li.dataset.txt.includes(text);
     li.classList.toggle("dim", filtering && !(okCat && okTxt));
@@ -583,9 +602,11 @@ function applyFilter() {
       if (i >= 0) d.innerHTML = esc(raw.slice(0, i)) + "<mark>" + esc(raw.slice(i, i + text.length)) + "</mark>" + esc(raw.slice(i + text.length));
     } else d.textContent = raw;
   });
-  if (filtering) document.querySelectorAll("[data-node]").forEach(n => {
-    const hasHit = [...n.querySelectorAll(".item")].some(li => !li.classList.contains("dim"));
-    if (hasHit) setOpen(n, true);
+  document.querySelectorAll("#tree [data-node]").forEach(n => {
+    const items = n.querySelectorAll(".item");
+    const hasHit = [...items].some(li => !li.classList.contains("dim"));
+    n.style.display = filtering && items.length && !hasHit ? "none" : "";
+    if (filtering && hasHit) setOpen(n, true);
   });
 }
 </script>
