@@ -74,8 +74,8 @@ EVALUATION_GUIDELINES、TENDER_ANNOUNCEMENT、LAW_OR_POLICY 子文件預設 EXCL
 
 # 第二階段:接真模型(缺陷修畢、goldtest 全綠後才能開始)
 
-wbs.toml 的 `[llm]` 已填入內網真實端點(`https://INTERNAL-LLM-HOST/v1`,
-model=`/main_model`,無需 API key,max_model_len=128k)。依序執行:
+內網真實端點設定於 `wbs.local.toml`(不進 git;無需 API key,
+max_model_len=128k)。依序執行:
 
 ## 2-1 端點煙霧測試
 先寫一個最小測試(或 `wbs llm-check` 子命令):呼叫 `/v1/models` 確認存活,

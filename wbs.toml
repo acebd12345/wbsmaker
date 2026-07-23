@@ -1,7 +1,6 @@
 [llm]
-# 內網 vLLM 推論伺服器(2026-07-20 實測 /v1/models 存活,無需 API key)
-# max_model_len = 128000,單次輸入上限據此保守設定
-base_url = "https://INTERNAL-LLM-HOST/v1"
+# 端點等機器相關設定請放 wbs.local.toml(不進 git),此檔只放可共享的預設值
+base_url = "http://localhost:8000/v1"
 model = "/main_model"
 api_key = "not-needed"
 max_input_tokens = 60000

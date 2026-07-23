@@ -70,16 +70,19 @@ names = ["需求規範書","需求規格書","工作說明書","採購需求說�
 
 
 def load_config(base_dir: Path | None = None) -> dict:
-    """Load wbs.toml from base_dir or cwd. Falls back to defaults."""
+    """Load config: defaults <- wbs.toml <- wbs.local.toml.
+
+    wbs.local.toml is gitignored — put machine-specific values there
+    (e.g. the real LLM endpoint), keep wbs.toml shareable.
+    """
     if base_dir is None:
         base_dir = Path.cwd()
-    toml_path = base_dir / "wbs.toml"
-    if toml_path.exists():
-        with open(toml_path, "rb") as f:
-            user = tomllib.load(f)
-        # Merge with defaults
-        cfg = {}
-        for section, defaults in DEFAULT_CONFIG.items():
-            cfg[section] = {**defaults, **user.get(section, {})}
-        return cfg
-    return {k: dict(v) for k, v in DEFAULT_CONFIG.items()}
+    cfg = {k: dict(v) for k, v in DEFAULT_CONFIG.items()}
+    for name in ("wbs.toml", "wbs.local.toml"):
+        toml_path = base_dir / name
+        if toml_path.exists():
+            with open(toml_path, "rb") as f:
+                user = tomllib.load(f)
+            for section, values in user.items():
+                cfg.setdefault(section, {}).update(values)
+    return cfg
