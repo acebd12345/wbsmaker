@@ -11,3 +11,5 @@ data/
 tests/golden/*.pdf
 dist_pkg/
 wbs_package_*.zip
+reports/
+wbs.local.toml
