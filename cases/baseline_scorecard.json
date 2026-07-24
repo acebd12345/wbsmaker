@@ -1,0 +1,33 @@
+{
+  "per_case": [
+    {
+      "case_id": "case-11108",
+      "status": "ran",
+      "skip_reason": null,
+      "frozen": {
+        "L1_f1": 1.0,
+        "L2_hit": 1.0,
+        "L3_acc": 1.0,
+        "L4_acc": 1.0
+      },
+      "adjudicated": null
+    }
+  ],
+  "aggregates": {
+    "micro": 1.0,
+    "macro": 1.0,
+    "by_unit": [
+      {
+        "unit": "default",
+        "n": 1,
+        "low_n": true
+      }
+    ],
+    "skipped_count": 0
+  },
+  "merge_gate": {
+    "any_active_below_floor": false,
+    "macro_regressed": false,
+    "decision": "allow"
+  }
+}

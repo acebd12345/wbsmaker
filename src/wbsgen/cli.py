@@ -575,6 +575,59 @@ def goldtest(
     console.print("[green]Golden test PASSED[/green]")
 
 
+# ── eval ───────────────────────────────────────────────────────────────
+
+eval_app = typer.Typer(add_completion=False, help="Evaluation runner (scorecard).")
+app.add_typer(eval_app, name="eval")
+
+
+@eval_app.command("run")
+def eval_run():
+    """Score every case against frozen labels; write scorecard + merge gate."""
+    from .eval import run_eval, write_baseline_if_absent
+
+    base_dir = Path.cwd()
+    scorecard, exit_code = run_eval(base_dir=base_dir)
+
+    # scorecard -> reports/ (gitignored); baseline -> cases/ (committed, first run)
+    reports_dir = base_dir / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    import json
+    (reports_dir / "eval_scorecard.json").write_text(
+        json.dumps(scorecard.model_dump(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    baseline_path = base_dir / "cases" / "baseline_scorecard.json"
+    wrote_baseline = write_baseline_if_absent(scorecard, baseline_path)
+
+    tbl = RichTable(title="Eval Scorecard")
+    tbl.add_column("Case"); tbl.add_column("Status")
+    tbl.add_column("L1_f1"); tbl.add_column("L2_hit")
+    tbl.add_column("L3_acc"); tbl.add_column("L4_acc")
+    for p in scorecard.per_case:
+        if p.frozen:
+            f = p.frozen
+            tbl.add_row(p.case_id, p.status, f"{f.L1_f1:.3f}",
+                        f"{f.L2_hit:.3f}", f"{f.L3_acc:.3f}", f"{f.L4_acc:.3f}")
+        else:
+            tbl.add_row(p.case_id, f"{p.status} ({p.skip_reason})", "-", "-", "-", "-")
+    console.print(tbl)
+
+    a = scorecard.aggregates
+    console.print(f"micro={a.micro:.3f}  macro={a.macro:.3f}  "
+                  f"skipped={a.skipped_count}")
+    g = scorecard.merge_gate
+    console.print(f"merge_gate: decision={g.decision} "
+                  f"(below_floor={g.any_active_below_floor}, "
+                  f"regressed={g.macro_regressed})")
+    if wrote_baseline:
+        console.print(f"[green]baseline written: {baseline_path}[/green]")
+
+    if exit_code != 0:
+        console.print("[red]eval FAILED: one or more cases failed[/red]")
+        raise typer.Exit(exit_code)
+
+
 # ── Entry point ────────────────────────────────────────────────────────
 
 def app_entry():
