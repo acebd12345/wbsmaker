@@ -13,3 +13,4 @@ dist_pkg/
 wbs_package_*.zip
 reports/
 wbs.local.toml
+cases/locators.local.toml
