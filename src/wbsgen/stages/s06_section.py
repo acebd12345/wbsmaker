@@ -1,4 +1,9 @@
-"""Stage 06: Section detection — locate chapter titles in body text and build sections."""
+"""Stage 06: Section detection — locate chapter titles in body text and build sections.
+
+Numbering systems (per doc_type patterns, numeral sets, font thresholds, TOC
+reject markers, title formats) live in the profile (profiles/*.toml). This
+module holds only the detection algorithm.
+"""
 from __future__ import annotations
 
 import json
@@ -6,13 +11,13 @@ import re
 from pathlib import Path
 
 from ..models import PageQuality, Section
-
-
-# Chinese numerals for chapter headings
-_CN_CHAPTER = ["壹", "貳", "參", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]
+from ..profile import SectionNumbering, SectionProfile, load_profile
 
 
 def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
+    profile = load_profile(cfg)
+    sec_profile = profile.section
+
     pages_dir = proj_dir / "01_parse" / "pages"
     subdocs_path = proj_dir / "04_subdoc" / "subdocs.json"
     toc_path = proj_dir / "05_toc" / "toc.json"
@@ -39,11 +44,7 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
         end = subdoc["page_end"]
 
         # Only process document types that have meaningful sections
-        if doc_type not in (
-            "REQUIREMENT_SPECIFICATION", "CONTRACT_BODY",
-            "BID_INSTRUCTIONS", "EVALUATION_GUIDELINES",
-            "ATTACHMENT",
-        ):
+        if doc_type not in sec_profile.doc_types:
             continue
 
         # Get TOC entries for this subdoc
@@ -60,7 +61,9 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
                 page_blocks[pi] = data.get("blocks", [])
 
         # Find chapter titles in body text
-        sections = _find_sections(sid, start, end, page_blocks, toc_entries, doc_type)
+        sections = _find_sections(
+            sid, start, end, page_blocks, toc_entries, doc_type, sec_profile
+        )
         # Assign globally unique section_id: {subdoc_id}-sec-{nnn}
         for sec in sections:
             global_sec_counter += 1
@@ -84,6 +87,7 @@ def _find_sections(
     page_blocks: dict[int, list[dict]],
     toc_entries: list[dict],
     doc_type: str,
+    sec_profile: SectionProfile,
 ) -> list[Section]:
     """Find section boundaries using title blocks in body text."""
     # Build list of expected chapter titles from TOC
@@ -108,8 +112,8 @@ def _find_sections(
             if not text_norm:
                 continue
 
-            # Check for chapter title pattern: 壹、title or 第一章 title
-            hit = _match_chapter_title(text_norm, blk, doc_type)
+            # Check for chapter title pattern (numbering system from profile)
+            hit = _match_chapter_title(text_norm, blk, doc_type, sec_profile)
             if hit:
                 numeral, title = hit
                 title_hits.append((pi, blk["block_id"], title, numeral))
@@ -148,51 +152,41 @@ def _find_sections(
     return sections
 
 
-def _match_chapter_title(text: str, blk: dict, doc_type: str) -> tuple[str, str] | None:
-    """Match a block's text against chapter title patterns.
+def _match_chapter_title(
+    text: str, blk: dict, doc_type: str, sec_profile: SectionProfile
+) -> tuple[str, str] | None:
+    """Match a block's text against the doc_type's numbering system (profile).
 
-    Returns (numeral, full_title) if matched, None otherwise.
-    Uses font size as additional signal — chapter titles are typically larger.
+    Returns (marker, full_title) if matched, None otherwise.
+    Uses font size as an additional signal — chapter titles are typically larger.
     """
+    numbering = sec_profile.numbering.get(doc_type)
+    if numbering is None:
+        return None
+
     font_size = blk.get("font_size", 0)
+    if font_size < numbering.min_font:
+        return None
 
-    # For requirement specification: look for 壹、title pattern
-    # Chapter titles typically have font_size >= 14
-    if doc_type == "REQUIREMENT_SPECIFICATION":
-        for cn in _CN_CHAPTER:
-            pattern = rf"^({cn})[、.．,](.+)"
-            m = re.match(pattern, text)
-            if m and font_size >= 13:
-                numeral = m.group(1)
+    raw_text = blk.get("text", "")
+    if numbering.toc_reject and any(m in raw_text for m in sec_profile.toc_reject_markers):
+        return None
+
+    # numeral_set → expand the pattern's {numeral} placeholder per numeral
+    if numbering.numeral_set:
+        for cn in numbering.numeral_set:
+            m = re.match(numbering.pattern.replace("{numeral}", cn), text)
+            if m:
+                marker = m.group(1)
                 title_part = m.group(2).strip()
-                # Filter out TOC entries (with dots)
-                if "...." in blk.get("text", "") or "…" in blk.get("text", ""):
-                    return None
-                return numeral, f"{numeral}、{title_part}"
+                return marker, numbering.title_format.format(marker=marker, title=title_part)
+        return None
 
-    # For contract body: look for 第N條 pattern in body text (not TOC lines)
-    if doc_type == "CONTRACT_BODY":
-        # Filter out TOC entries (with dots or page numbers)
-        raw_text = blk.get("text", "")
-        if "...." in raw_text or "…" in raw_text:
-            return None
-        m = re.match(r"^(第[一二三四五六七八九十百]+條)\s*(.+)", text)
-        if m and font_size >= 13:
-            # Strip trailing page numbers and dots from title
-            title_part = m.group(2).strip()
-            title_part = re.sub(r"[.…·]+\s*\d*\s*$", "", title_part).strip()
-            return m.group(1), f"{m.group(1)} {title_part}"
-
-    # For attachments: look for 附件N：title pattern
-    if doc_type == "ATTACHMENT":
-        m = re.match(r"^(附件\d+)[：:]\s*(.+)", text)
-        if m and font_size >= 14:
-            return m.group(1), f"{m.group(1)}：{m.group(2)}"
-
-    # For bid instructions: look for numbered sections
-    if doc_type == "BID_INSTRUCTIONS":
-        m = re.match(r"^(第[一二三四五六七八九十百]+條|[一二三四五六七八九十]+[、.])\s*(.+)", text)
-        if m and font_size >= 12:
-            return m.group(1), f"{m.group(1)} {m.group(2)}"
-
-    return None
+    m = re.match(numbering.pattern, text)
+    if not m:
+        return None
+    marker = m.group(1)
+    title_part = m.group(2).strip()
+    if numbering.strip_trailing_pagenum:
+        title_part = re.sub(r"[.…·]+\s*\d*\s*$", "", title_part).strip()
+    return marker, numbering.title_format.format(marker=marker, title=title_part)

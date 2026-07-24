@@ -1,0 +1,216 @@
+# WBS 產生器 — 市府共通格式 profile(v0)
+#
+# 內容 = 今日 11108 契約規則,由 s04/s06/s09 硬編碼「行為不變」搬入。
+# 每個欄位標註來源對照(欄位 ← 原檔案:函式)。
+# 格式為 TOML(定案);regex 一律用單引號字面字串,免跳脫反斜線。
+#
+# 硬規則:找不到本檔 → profile.load_profile 明確報錯,禁止靜默退回硬編碼。
+
+profile_id = "default"          # 市府共通;內容=11108 規則
+version = 1
+# extends 預留,v0 不實作繼承
+
+
+# ─────────────────────────────────────────────────────────────────────
+# [subdoc] ← s04_subdoc.py:run / _build_subdocs_from_labels
+# ─────────────────────────────────────────────────────────────────────
+[subdoc]
+# ← s04:run phase 1c(框線字元頁 → LAW_OR_POLICY)
+box_drawing_chars = "│├┤┬┴┼─"
+# ← s04:run phase 2(附件/契約條 TOC 過濾標記);s06 亦共用
+toc_reject_markers = ["....", "…"]
+
+# quality_zone_map ← s04:run phase 1a(頁面品質 → 子文件區塊)
+[subdoc.quality_zone_map]
+IMAGE_ONLY = "SCANNED_PAGES"
+GARBLED_TEXT = "SERVICE_PROPOSAL"
+
+# footer_family_hints ← s04:run phase 1b(頁尾家族 pattern 含這些詞 → 投標須知帶)
+[subdoc.footer_family]
+bid_instructions_hints = ["投標", "須知"]
+
+# header_family_hints ← s04:run phase 1b(頁首家族 pattern 含此 token → 評選須知帶)
+[subdoc.header_family]
+evaluation_date_pattern = "{n}/{n}/{n}"
+
+# title_anchors ← s04:run phase 2(嚴格標題錨點,家族擴張前定位)
+# match_mode: prefix = re.match(錨點在區塊開頭) / contains = re.search(區塊內含)
+# scan_blocks: 只掃該頁前 N 個區塊
+[[subdoc.title_anchors]]
+name = "attachment"                       # ← s04:run attachment_start
+doc_type = "ATTACHMENT"
+pattern = '附件\d|附件[一二三四五六七八九十]'
+min_font = 14.0
+toc_reject = true
+scan_blocks = 4
+match_mode = "prefix"
+
+[[subdoc.title_anchors]]
+name = "signature"                        # ← s04:run signature_page
+doc_type = "SIGNATURE_PAGE"
+pattern = '立契約人'
+min_font = 0.0
+toc_reject = false
+scan_blocks = 4
+match_mode = "prefix"
+
+[[subdoc.title_anchors]]
+name = "tender"                           # ← s04:run tender_start
+doc_type = "TENDER_ANNOUNCEMENT"
+pattern = '招標公告|公開評選|公開徵求'
+min_font = 0.0
+toc_reject = false
+scan_blocks = 6
+match_mode = "contains"
+
+# doc_type_titles ← s04:_build_subdocs_from_labels type_map(子文件顯示標題)
+[subdoc.doc_type_titles]
+CONTRACT_BODY = "契約本文"
+ATTACHMENT = "附件"
+SIGNATURE_PAGE = "簽署頁"
+REQUIREMENT_SPECIFICATION = "需求規範書"
+BID_INSTRUCTIONS = "投標須知"
+EVALUATION_GUIDELINES = "評選須知"
+TENDER_ANNOUNCEMENT = "招標公告"
+SCANNED_PAGES = "掃描頁"
+LAW_OR_POLICY = "法規文件"
+SERVICE_PROPOSAL = "服務建議書"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# [section] ← s06_section.py:run / _find_sections / _match_chapter_title
+# ─────────────────────────────────────────────────────────────────────
+[section]
+# ← s06:run(只對這些 doc_type 找章節)
+doc_types = [
+    "REQUIREMENT_SPECIFICATION", "CONTRACT_BODY",
+    "BID_INSTRUCTIONS", "EVALUATION_GUIDELINES", "ATTACHMENT",
+]
+# ← s06:_match_chapter_title(壹/第N條 TOC 過濾標記)
+toc_reject_markers = ["....", "…"]
+
+# 每 doc_type 一組編號體系 ← s06:_match_chapter_title 各分支
+# pattern group(1)=marker(編號)、group(2)=標題;title_format 以 {marker}/{title} 組回
+# numeral_set 存在時,pattern 以 {numeral} 佔位逐字展開(壹、貳…各成一條)
+
+[section.numbering.REQUIREMENT_SPECIFICATION]
+numeral_set = ["壹", "貳", "參", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]
+pattern = '^({numeral})[、.．,](.+)'
+min_font = 13.0
+toc_reject = true
+title_format = "{marker}、{title}"
+
+[section.numbering.CONTRACT_BODY]
+pattern = '^(第[一二三四五六七八九十百]+條)\s*(.+)'
+min_font = 13.0
+toc_reject = true
+strip_trailing_pagenum = true
+title_format = "{marker} {title}"
+
+[section.numbering.ATTACHMENT]
+pattern = '^(附件\d+)[：:]\s*(.+)'
+min_font = 14.0
+toc_reject = false
+title_format = "{marker}：{title}"
+
+[section.numbering.BID_INSTRUCTIONS]
+pattern = '^(第[一二三四五六七八九十百]+條|[一二三四五六七八九十]+[、.])\s*(.+)'
+min_font = 12.0
+toc_reject = false
+title_format = "{marker} {title}"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# [classify] ← s09_classify.py:run / _rule_classify
+# ─────────────────────────────────────────────────────────────────────
+[classify]
+# ← s09:run EXCLUDED_DOC_TYPES(整份排除,不進 WBS)
+excluded_doc_types = [
+    "BID_INSTRUCTIONS", "EVALUATION_GUIDELINES",
+    "TENDER_ANNOUNCEMENT", "LAW_OR_POLICY",
+]
+# ← s09:run(這些 doc_type 的 section 直接跳過,不分類)
+skip_doc_types = ["SERVICE_PROPOSAL", "SCANNED_PAGES"]
+
+# title_rules ← s09:_rule_classify(有序;安全|資安 必在 功能|系統 之前)
+[[classify.title_rules]]
+pattern = '價金|給付|付款|計價|費用'
+category = "PAYMENT"
+[[classify.title_rules]]
+pattern = '驗收|查驗'
+category = "ACCEPTANCE"
+[[classify.title_rules]]
+pattern = '訓練|教育'
+category = "TRAINING"
+[[classify.title_rules]]
+pattern = '退場|移轉'
+category = "TRANSITION"
+[[classify.title_rules]]
+pattern = '目標|範圍|概述|背景'
+category = "SCOPE"
+[[classify.title_rules]]
+pattern = '維運|維護|保養|支援'
+category = "MAINTENANCE"
+[[classify.title_rules]]
+pattern = '交付|產出|文件|報告'
+category = "DELIVERABLE"
+[[classify.title_rules]]
+pattern = '時程|期限|里程碑'
+category = "MILESTONE"
+[[classify.title_rules]]
+pattern = '品質|檢核'
+category = "QUALITY"
+[[classify.title_rules]]
+pattern = '管理|組織|人力'
+category = "MANAGEMENT"
+[[classify.title_rules]]
+pattern = '限制|約束|條件'
+category = "CONSTRAINT"
+[[classify.title_rules]]
+pattern = '安全|資安'
+category = "SECURITY_ACTIVITY"
+[[classify.title_rules]]
+pattern = '功能|系統|新增|異動'
+category = "SCOPE"
+
+# priority ← s09:run(依 subdoc doc_type 定 priority + wbs_relevance)
+[classify.priority.default]
+priority = "PRIMARY"
+wbs_relevance = 0.8
+[classify.priority.excluded]
+priority = "EXCLUDED"
+wbs_relevance = 0.05
+[classify.priority.REQUIREMENT_SPECIFICATION]
+priority = "PRIMARY"
+wbs_relevance = 0.95
+[classify.priority.CONTRACT_BODY]
+priority = "SECONDARY"
+wbs_relevance = 0.6
+# ATTACHMENT 特例:category 命中 primary_categories → PRIMARY,否則 SECONDARY
+[classify.priority.ATTACHMENT]
+primary_categories = [
+    "DELIVERABLE", "QUALITY", "MILESTONE", "MAINTENANCE",
+    "ACCEPTANCE", "PAYMENT", "TRAINING", "TRANSITION",
+]
+primary_relevance = 0.90
+secondary_relevance = 0.5
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 預留區塊(v0 只定義欄位;s02/s03 參數 v0.1 再搬)
+# ─────────────────────────────────────────────────────────────────────
+[quality]
+# garbled_signals 預留(v0 不搬 s02);雙語附錄誤傷防護未來放這
+garbled_signals = []
+
+[layout]
+# band 參數預留(v0 不搬 s03)
+header_band = 0.0
+footer_band = 0.0
+
+# [conservative] 保守模式最少集 ← grok.md 附錄十一.8(v0 只定義欄位與預設)
+[conservative]
+use_profile = "default"
+threshold_delta = -0.15
+forbid_long_forward_fill = true
+always_emit_annotation = true

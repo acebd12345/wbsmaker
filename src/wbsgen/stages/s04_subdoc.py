@@ -1,4 +1,9 @@
-"""Stage 04: Subdocument boundary detection — structured multi-signal approach."""
+"""Stage 04: Subdocument boundary detection — structured multi-signal approach.
+
+All business literals (anchor patterns, footer/header hints, box-drawing chars,
+quality→zone map, display titles) live in the profile (profiles/*.toml), loaded
+via ``load_profile``. This module contains only the splitting *algorithm*.
+"""
 from __future__ import annotations
 
 import json
@@ -6,16 +11,18 @@ import re
 from pathlib import Path
 
 from ..models import PageQuality, Subdocument, SubdocType
+from ..profile import Profile, TitleAnchor, load_profile
 
 
 def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
+    profile = load_profile(cfg)
+    sub = profile.subdoc
+
     pages_dir = proj_dir / "01_parse" / "pages"
     quality_path = proj_dir / "02_quality" / "page_quality.jsonl"
     families_path = proj_dir / "03_layout" / "families.json"
     out_dir = proj_dir / "04_subdoc"
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    spec_names = cfg.get("spec_anchors", {}).get("names", [])
 
     # Load data
     qualities = {}
@@ -66,21 +73,21 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
 
     labels = [""] * total_pages
 
-    # 1a. Quality-based zones
+    # 1a. Quality-based zones (profile.subdoc.quality_zone_map)
     for pi in range(total_pages):
-        q = qualities.get(pi, "")
-        if q == PageQuality.IMAGE_ONLY.value:
-            labels[pi] = "SCANNED_PAGES"
-        elif q == PageQuality.GARBLED_TEXT.value:
-            labels[pi] = "SERVICE_PROPOSAL"
+        zone = sub.quality_zone_map.get(qualities.get(pi, ""))
+        if zone:
+            labels[pi] = zone
 
-    # 1b. Footer family zones
+    # 1b. Footer / header family zones (profile hints)
     bid_footer_id = None
     eval_header_id = None
+    bid_hints = sub.footer_family.bid_instructions_hints
+    eval_token = sub.header_family.evaluation_date_pattern
     for fam_id, pattern in family_patterns.items():
-        if "投標" in pattern or "須知" in pattern:
+        if any(h in pattern for h in bid_hints):
             bid_footer_id = fam_id
-        if "{n}/{n}/{n}" in pattern:
+        if eval_token and eval_token in pattern:
             eval_header_id = fam_id
 
     # Label pages with bid instructions footer
@@ -100,74 +107,35 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
                 eval_pages.add(pi)
 
     # 1c. Box-drawing character pages → LAW_OR_POLICY
+    box_chars = sub.box_drawing_chars
     for pi in range(total_pages):
         if labels[pi]:
             continue
         if qualities.get(pi) != PageQuality.NORMAL_TEXT.value:
             continue
         text = "".join(b.get("text", "") for b in all_pages[pi].get("blocks", []))
-        if any(ch in text for ch in "│├┤┬┴┼─"):
+        if box_chars and any(ch in text for ch in box_chars):
             labels[pi] = "LAW_OR_POLICY"
 
     # ── Phase 2: Strict title anchors (before family extension) ────
 
-    # Find ATTACHMENT start: page where first title block starts with "附件"
-    # Must NOT be a TOC entry (no trailing dots)
-    attachment_start = None
-    for pi in range(total_pages):
-        if labels[pi]:
-            continue
-        if qualities.get(pi) != PageQuality.NORMAL_TEXT.value:
-            continue
-        blks = all_pages[pi].get("blocks", [])
-        for b in blks[:4]:
-            raw_text = b.get("text", "")
-            text = re.sub(r"\s+", "", raw_text)
-            font_size = b.get("font_size", 0)
-            if not text:
-                continue
-            # Skip TOC entries (contain consecutive dots)
-            if "...." in raw_text or "…" in raw_text:
-                continue
-            if (re.match(r"附件\d|附件[一二三四五六七八九十]", text)
-                    and font_size >= 14):
-                attachment_start = pi
-                break
-        if attachment_start is not None:
-            break
+    toc_markers = sub.toc_reject_markers
 
-    # Find SIGNATURE page: "立契約人" in first blocks
-    signature_page = None
-    for pi in range(total_pages):
-        if labels[pi]:
-            continue
-        if qualities.get(pi) != PageQuality.NORMAL_TEXT.value:
-            continue
-        blks = all_pages[pi].get("blocks", [])
-        for b in blks[:4]:
-            text = re.sub(r"\s+", "", b.get("text", ""))
-            if re.match(r"立契約人", text):
-                signature_page = pi
-                break
-        if signature_page is not None:
-            break
+    # ATTACHMENT start: first non-TOC title block matching the attachment anchor
+    attachment_start = _find_anchor_page(
+        sub.anchor("attachment"), all_pages, qualities, labels, total_pages, toc_markers
+    )
 
-    # Find TENDER_ANNOUNCEMENT: "招標公告" in title position
+    # SIGNATURE page: block matching the signature anchor
+    signature_page = _find_anchor_page(
+        sub.anchor("signature"), all_pages, qualities, labels, total_pages, toc_markers
+    )
+
+    # TENDER_ANNOUNCEMENT: block matching the tender anchor
     # Search BEFORE extending eval guidelines to prevent overlap
-    tender_start = None
-    for pi in range(total_pages):
-        if labels[pi]:
-            continue
-        if qualities.get(pi) != PageQuality.NORMAL_TEXT.value:
-            continue
-        blks = all_pages[pi].get("blocks", [])
-        for b in blks[:6]:
-            text = re.sub(r"\s+", "", b.get("text", ""))
-            if "招標公告" in text or "公開評選" in text or "公開徵求" in text:
-                tender_start = pi
-                break
-        if tender_start is not None:
-            break
+    tender_start = _find_anchor_page(
+        sub.anchor("tender"), all_pages, qualities, labels, total_pages, toc_markers
+    )
 
     # Label tender announcement now (before eval extension)
     if tender_start is not None:
@@ -243,7 +211,7 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
 
     # ── Phase 6: Build subdocuments from labels ───────────────────
 
-    subdocs = _build_subdocs_from_labels(labels, total_pages)
+    subdocs = _build_subdocs_from_labels(labels, total_pages, sub.doc_type_titles)
 
     (out_dir / "subdocs.json").write_text(
         json.dumps(
@@ -254,19 +222,53 @@ def run(proj_dir: Path, cfg: dict, manifest) -> dict | None:
     return None
 
 
-def _build_subdocs_from_labels(labels: list[str], total_pages: int) -> list[Subdocument]:
-    type_map = {
-        "CONTRACT_BODY": (SubdocType.CONTRACT_BODY, "契約本文"),
-        "ATTACHMENT": (SubdocType.ATTACHMENT, "附件"),
-        "SIGNATURE_PAGE": (SubdocType.SIGNATURE_PAGE, "簽署頁"),
-        "REQUIREMENT_SPECIFICATION": (SubdocType.REQUIREMENT_SPECIFICATION, "需求規範書"),
-        "BID_INSTRUCTIONS": (SubdocType.BID_INSTRUCTIONS, "投標須知"),
-        "EVALUATION_GUIDELINES": (SubdocType.EVALUATION_GUIDELINES, "評選須知"),
-        "TENDER_ANNOUNCEMENT": (SubdocType.TENDER_ANNOUNCEMENT, "招標公告"),
-        "SCANNED_PAGES": (SubdocType.SCANNED_PAGES, "掃描頁"),
-        "LAW_OR_POLICY": (SubdocType.LAW_OR_POLICY, "法規文件"),
-        "SERVICE_PROPOSAL": (SubdocType.SERVICE_PROPOSAL, "服務建議書"),
-    }
+def _find_anchor_page(
+    anchor: TitleAnchor | None,
+    all_pages: list[dict],
+    qualities: dict[int, str],
+    labels: list[str],
+    total_pages: int,
+    toc_markers: list[str],
+) -> int | None:
+    """Return the first unlabeled NORMAL_TEXT page whose leading blocks match
+    the given title anchor. Match/font/TOC rules come entirely from the anchor.
+    """
+    if anchor is None:
+        return None
+    for pi in range(total_pages):
+        if labels[pi]:
+            continue
+        if qualities.get(pi) != PageQuality.NORMAL_TEXT.value:
+            continue
+        blks = all_pages[pi].get("blocks", [])
+        for b in blks[: anchor.scan_blocks]:
+            raw_text = b.get("text", "")
+            text = re.sub(r"\s+", "", raw_text)
+            if not text:
+                continue
+            if anchor.toc_reject and any(m in raw_text for m in toc_markers):
+                continue
+            if b.get("font_size", 0) < anchor.min_font:
+                continue
+            if anchor.match_mode == "contains":
+                matched = re.search(anchor.pattern, text) is not None
+            else:
+                matched = re.match(anchor.pattern, text) is not None
+            if matched:
+                return pi
+    return None
+
+
+def _build_subdocs_from_labels(
+    labels: list[str], total_pages: int, doc_type_titles: dict[str, str]
+) -> list[Subdocument]:
+    def _resolve(label: str) -> tuple[SubdocType, str]:
+        try:
+            dt = SubdocType(label)
+        except ValueError:
+            dt = SubdocType.UNKNOWN
+        title = doc_type_titles.get(label, label)
+        return dt, title
 
     subdocs = []
     current = labels[0]
@@ -274,7 +276,7 @@ def _build_subdocs_from_labels(labels: list[str], total_pages: int) -> list[Subd
 
     for pi in range(1, total_pages):
         if labels[pi] != current:
-            dt, title = type_map.get(current, (SubdocType.UNKNOWN, current))
+            dt, title = _resolve(current)
             subdocs.append(Subdocument(
                 subdoc_id=f"subdoc-{len(subdocs)+1:03d}",
                 title=title, doc_type=dt,
@@ -284,7 +286,7 @@ def _build_subdocs_from_labels(labels: list[str], total_pages: int) -> list[Subd
             start = pi
             current = labels[pi]
 
-    dt, title = type_map.get(current, (SubdocType.UNKNOWN, current))
+    dt, title = _resolve(current)
     subdocs.append(Subdocument(
         subdoc_id=f"subdoc-{len(subdocs)+1:03d}",
         title=title, doc_type=dt,
