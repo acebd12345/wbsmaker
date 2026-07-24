@@ -20,10 +20,10 @@ flowchart TD
         J[💤 llm_logs 隱私開關]
     end
 
-    subgraph 支線一["支線一:學習系統(LEARNING.md,停車中)"]
-        K[🌱 案例庫] --> L[🌱 Profile 三層繼承<br/>市府→局處→單位]
-        L --> M[🌱 修正 CLI + 回流提議]
-        M --> N[🌱 評測記分卡]
+    subgraph 支線一["支線一:學習系統(v0 已完成 2026-07-24)"]
+        K[✅ 案例庫 v0<br/>指紋+分層答案,11108 已入庫] --> L[✅ Profile v0<br/>規則外部化+金絲雀,繼承 🌱 等案例]
+        L --> M[✅ 修正 CLI v0<br/>L1 標註閉環;回流提議 🌱 等案例]
+        M --> N[✅ 評測記分卡 v0<br/>SKIP/FAIL 語意+merge_gate]
         N --> O[💤 地端模型換版/微調]
     end
 
@@ -61,15 +61,25 @@ flowchart TD
 | llm_logs 開關 | log 可選只存 hash 不存原文 | 契約內容散落各機器 |
 | 掃描頁 OCR | p154–163 類文件 | 低優先,等有需求 |
 
-## 支線一:學習系統(LEARNING.md 已有設計基線)
+## 支線一:學習系統(v0 已完成,2026-07-24,commit f9be078–234e314)
 
-讓解析「越用越聰明」:格式知識外部化成 profile(市府→局處→單位繼承)、
-失敗落地成 NEEDS_REVIEW、人工修正回流成 profile 規則+回歸案例、
-全案例評測當剎車。聰明積累在地端資產(案例庫/profile/評測),
-模型只是可換引擎——契約不外流與成長性不衝突。
+讓解析「越用越聰明」:格式知識外部化成 profile、失敗落地成 NEEDS_REVIEW、
+人工修正回流成 profile 規則+回歸案例、全案例評測當剎車。
+聰明積累在地端資產(案例庫/profile/評測),模型只是可換引擎。
+設計定案紀錄見 grok.md(三輪外部評審);任務書見 LEARNING_V0.md。
 
-**開工條件**:同仁測試收回 5–10 份不同單位契約的真實失敗案例。
-在那之前不預先設計 profile 分類法。
+**v0 已交付**(55 測試綠):
+- Profile v0:s04/s06/s09 規則全數搬入 profiles/default.toml,
+  程式零業務字面量(靜態檢查擋)+ 金絲雀/反金絲雀常駐測試
+- 案例庫 v0:cases/case-11108.json(指紋無原文、無執行期 id、
+  source×status 正交)
+- 評測 v0:wbs eval run 四層記分卡(11108 全 1.000)、
+  缺 PDF=SKIP、sha 不符=FAIL、merge_gate 剎車
+- 修正 CLI v0:wbs review list/annotate/accept——xlsx 預填標註
+  (L1 切分,doc_type 下拉)→ 案例入庫為 draft
+
+**尚未做(等 5–10 份不同單位真實失敗案例)**:三層繼承分類法、
+回流提議器(L4)、L2–L4 標註 CLI、promote 指令。
 
 ## 支線二:驗收輔助系統(構想 2026-07-23)
 

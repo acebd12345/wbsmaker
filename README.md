@@ -31,6 +31,12 @@ wbs inspect <project-id> issues
 
 # Golden test (regression)
 wbs goldtest
+
+# Learning system (v0)
+wbs eval run                    # score pipeline against cases/ (layered scorecard)
+wbs review list <project-id>    # show NEEDS_REVIEW / low-confidence signals
+wbs review annotate <project-id># emit prefilled annotation xlsx (L1 subdoc split)
+wbs review accept <project-id>  # validate annotation -> save case (draft)
 ```
 
 ## Pipeline Stages
@@ -51,8 +57,20 @@ wbs goldtest
 | 12 | localwbs | Generate per-subdoc WBS trees |
 | 13 | merge | Merge into global WBS |
 | 14 | validate | Validate structure and coverage |
-| 15 | export | Export to xlsx, json, csv, mermaid |
+| 15 | export | Export to xlsx, json, csv, mermaid, interactive HTML |
 
 ## Configuration
 
-Edit `wbs.toml` for LLM endpoint settings. Use `mock: true` for development without a live LLM.
+Config merge order: built-in defaults ← `wbs.toml` ← `wbs.local.toml`.
+
+- `wbs.toml` — shareable defaults (committed). Keep `mock = true` here.
+- `wbs.local.toml` — machine-specific values (gitignored): real LLM endpoint, `mock = false`.
+
+## Parsing rules live in profiles/
+
+Subdocument split anchors, section numbering systems, and classification
+keywords are declared in `profiles/default.toml`, not in code. To change
+parsing behavior, edit the profile — canary tests
+(`tests/unit/test_profile_p1.py`) verify the stages actually read it, and a
+static check bans business literals in stage code. Before merging a profile
+change, run `wbs eval run` and require `merge_gate: allow`.
