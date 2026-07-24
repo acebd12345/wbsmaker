@@ -628,6 +628,81 @@ def eval_run():
         raise typer.Exit(exit_code)
 
 
+# ── review (correction CLI, L1 only) ───────────────────────────────────
+
+review_app = typer.Typer(add_completion=False,
+                         help="L1 subdocument correction loop (list/annotate/accept).")
+app.add_typer(review_app, name="review")
+
+
+@review_app.command("list")
+def review_list(project: str = typer.Argument(..., help="Project ID")):
+    """Show NEEDS_REVIEW and low-confidence signals for a project."""
+    from .review import collect_review_items
+    proj_dir = _project_dir(project)
+    if not proj_dir.exists():
+        console.print(f"[red]Project not found: {project}[/red]")
+        raise typer.Exit(3)
+
+    items = collect_review_items(proj_dir)
+    console.print(f"[bold]Review signals for {project}[/bold]")
+    console.print(f"  NEEDS_REVIEW issues: {len(items['needs_review'])}")
+    for iss in items["needs_review"]:
+        console.print(f"    [{iss.get('severity')}] {iss.get('message')}")
+    console.print(f"  Low-confidence tables: {len(items['low_conf_tables'])}")
+    for t in items["low_conf_tables"]:
+        console.print(f"    {t['table_id']} conf={t['merge_confidence']} pages={t['pages']}")
+    console.print(f"  Coverage gaps: {len(items['coverage_gaps'])}")
+    for g in items["coverage_gaps"]:
+        console.print(f"    pages {g[0]}-{g[1]} uncovered")
+
+
+@review_app.command("annotate")
+def review_annotate(project: str = typer.Argument(..., help="Project ID")):
+    """Emit a pre-filled L1 annotation workbook (+ engineer YAML)."""
+    from .review import annotate
+    proj_dir = _project_dir(project)
+    if not proj_dir.exists():
+        console.print(f"[red]Project not found: {project}[/red]")
+        raise typer.Exit(3)
+
+    review_dir = proj_dir / "review"
+    try:
+        xlsx, yaml = annotate(proj_dir, review_dir)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(3)
+    console.print(f"[green]Wrote {xlsx}[/green]")
+    console.print(f"[green]Wrote {yaml}[/green]")
+
+
+@review_app.command("accept")
+def review_accept(project: str = typer.Argument(..., help="Project ID")):
+    """Validate a filled annotation and store it as a draft (corrected) case."""
+    from .review import AnnotationError, accept
+    proj_dir = _project_dir(project)
+    if not proj_dir.exists():
+        console.print(f"[red]Project not found: {project}[/red]")
+        raise typer.Exit(3)
+
+    xlsx = proj_dir / "review" / "annotation_L1.xlsx"
+    if not xlsx.exists():
+        console.print(f"[red]Annotation not found: {xlsx} (run 'review annotate' first)[/red]")
+        raise typer.Exit(3)
+
+    cases_dir = Path.cwd() / "cases"
+    try:
+        out = accept(proj_dir, xlsx, cases_dir)
+    except AnnotationError as e:
+        console.print(f"[red]Invalid annotation: {e}[/red]")
+        raise typer.Exit(3)
+    console.print(f"[green]Case stored as draft: {out}[/green]")
+    console.print(
+        "案例已入庫為 draft。profile 修改請人工編輯 profiles/*.toml,"
+        "合併前必跑 wbs eval run 確認 merge_gate=allow"
+    )
+
+
 # ── Entry point ────────────────────────────────────────────────────────
 
 def app_entry():
